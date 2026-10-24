@@ -9,6 +9,7 @@ A Python app that analyzes audio and recommends music using acoustic features, l
 - Save your music library and ratings locally.
 - Try hybrid recommendations combining three CLAP audio segments with acoustic features.
 - Rate how similar two songs sound (1–5), separately from Like/Dislike.
+- Compare CLAP-only, acoustic-only, and hybrid recommendations in the Evaluation tab.
 
 ## Getting started
 
@@ -44,3 +45,5 @@ python -m streamlit run app.py
 ```
 
 Audio files and preferences are stored locally in `library_data/` and excluded from Git. Protected audio formats are not supported.
+
+Rate at least three song pairs, then select **Evaluation → Run evaluation** to compare how each model's similarity ordering agrees with your ratings.
