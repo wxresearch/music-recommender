@@ -67,7 +67,7 @@ sid = selection["id"]
 features = selection["features"]
 st.audio(str(selection["path"]))
 
-tab1, tab2, tab3 = st.tabs(["Analysis", "Recommendations", "Library & preferences"])
+tab1, tab2, tab3, tab4 = st.tabs(["Analysis", "Recommendations", "Library & preferences", "Evaluation"])
 with tab1:
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Estimated tempo", f"{features['tempo']:.0f} BPM")
@@ -222,3 +222,45 @@ with tab3:
     if st.button("Delete selected song"):
         delete_song(sid)
         st.rerun()
+
+with tab4:
+    st.subheader("Compare recommendation methods")
+    st.caption("Compare CLAP-only, acoustic-only, and hybrid similarity scores "
+               "against your saved 1–5 song-pair ratings. Ratings are not used to "
+               "calculate the benchmark predictions.")
+    ratings = get_similarity_feedback()
+    st.write(f"Rated song pairs: {len(ratings)}")
+    eval_weight = st.slider("Hybrid acoustic weight for evaluation", 0.0, 1.0, 0.25, 0.05,
+                            key="evaluation_weight")
+    if st.button("Run evaluation", key="evaluation_run"):
+        if len(ratings) < 3:
+            st.warning("Rate at least 3 different song pairs first under Recommendations.")
+        else:
+            try:
+                from ai_embeddings import embedding_for
+                from evaluation import evaluate
+                with st.spinner("Loading embeddings and evaluating all rated pairs..."):
+                    embeddings = {song["id"]: embedding_for(song) for song in library}
+                    pair_data, summary = evaluate(library, ratings, embeddings, eval_weight)
+                st.session_state["evaluation_output"] = (pair_data, summary)
+                st.session_state["evaluation_context"] = (
+                    tuple(sorted(ratings.items())), tuple(s["id"] for s in library), eval_weight)
+            except ImportError:
+                st.error("Install optional AI dependencies: python -m pip install -r requirements-ai.txt")
+            except Exception as exc:
+                st.error(f"Evaluation failed: {exc}")
+    current_context = (tuple(sorted(ratings.items())), tuple(s["id"] for s in library), eval_weight)
+    if st.session_state.get("evaluation_context") == current_context:
+        pair_data, summary = st.session_state["evaluation_output"]
+        if pair_data.empty:
+            st.info("No rated pairs matched songs in your current library.")
+        else:
+            st.subheader("Agreement with your judgments")
+            st.dataframe(summary, hide_index=True, use_container_width=True)
+            st.caption("Spearman correlation ranges from -1 to +1; higher means "
+                       "the ordering agrees more closely with your ratings. "
+                       "A blank value means there is not enough variation to calculate it. "
+                       "With only a few rated pairs, results are highly uncertain.")
+            st.subheader("Rated pair comparisons")
+            st.dataframe(pair_data.round(3), hide_index=True, use_container_width=True)
+            st.bar_chart(summary.set_index("Method")["Spearman correlation"])
