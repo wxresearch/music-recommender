@@ -21,8 +21,16 @@ def analyze_audio(path):
     chroma = librosa.feature.chroma_stft(y=y, sr=sr)
     onset = librosa.onset.onset_strength(y=y, sr=sr)
 
+    beat_times = librosa.frames_to_time(beats, sr=sr)
+    beat_intervals = np.diff(beat_times)
+    # Beat regularity is the coefficient of variation of beat intervals.
+    beat_regularity = (float(1 / (1 + np.std(beat_intervals) /
+                                   max(np.mean(beat_intervals), 1e-8)))
+                       if len(beat_intervals) >= 2 else 0.0)
     result = {
         "tempo": tempo,
+        "beat_count": int(len(beats)),
+        "beat_regularity": beat_regularity,
         "rms": float(np.mean(rms)),
         "brightness": float(np.mean(centroid)),
         "bandwidth": float(np.mean(bandwidth)),
