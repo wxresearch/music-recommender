@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from analyzer import analyze_audio
-from library import add_song, delete_song, get_feedback, set_feedback, songs
+from library import add_song, delete_song, get_feedback, set_feedback, songs, get_similarity_feedback, rate_similarity
 from recommender import recommendations
 from visualizations import overview
 
@@ -158,20 +158,22 @@ with tab2:
         st.caption("Try a pretrained CLAP model to find similar-sounding music. "
                    "First run downloads the model and analyzes each saved track. "
                    "This is optional, separate from the default feature-based recommender.")
+        acoustic_weight = st.slider("Acoustic feature contribution", 0.0, 1.0, 0.25, 0.05)
         if st.button("Generate AI recommendations", key="run_clap"):
             try:
                 from ai_embeddings import ai_recommendations
                 with st.spinner("Computing or loading local audio embeddings..."):
                     ai_results = ai_recommendations(
                         library, sid, feedback=get_feedback(),
-                        mode=mode, weight=weight, limit=10)
+                        mode=mode, weight=weight, limit=10,
+                        acoustic_weight=acoustic_weight, pair_ratings=get_similarity_feedback())
                 st.session_state["ai_results"] = ai_results
-                st.session_state["ai_context"] = (sid, mode, tuple(sorted(get_feedback().items())), weight)
+                st.session_state["ai_context"] = (sid, mode, tuple(sorted(get_feedback().items())), weight, acoustic_weight, tuple(sorted(get_similarity_feedback().items())))
             except ImportError:
                 st.error("AI dependencies missing. In CMD run: python -m pip install -r requirements-ai.txt")
             except Exception as exc:
                 st.error(f"AI analysis failed: {exc}")
-        context = (sid, mode, tuple(sorted(get_feedback().items())), weight)
+        context = (sid, mode, tuple(sorted(get_feedback().items())), weight, acoustic_weight, tuple(sorted(get_similarity_feedback().items())))
         if st.session_state.get("ai_context") == context:
             ai_results = st.session_state.get("ai_results", [])
             if not ai_results:
@@ -181,6 +183,14 @@ with tab2:
                             f"· rank score {rec['rank_score']:.3f}")
                 matched_song = next(s for s in library if s["id"] == rec["id"])
                 st.audio(str(matched_song["path"]))
+                pair = tuple(sorted((sid, rec["id"])))
+                prior = get_similarity_feedback().get(pair, 3)
+                with st.form(key="similarity_" + sid + "_" + rec["id"]):
+                    judgment = st.select_slider("How similar do these songs sound?",
+                                                options=[1, 2, 3, 4, 5], value=prior)
+                    if st.form_submit_button("Save similarity rating"):
+                        rate_similarity(sid, rec["id"], int(judgment))
+                        st.rerun()
 
 
 with tab3:
