@@ -115,7 +115,7 @@ with tab2:
                         f"rank score {r['rank_score']:.2f}")
             st.audio(str(item["path"]))
             current = feedback.get(r["id"], 0)
-            st.caption(f"Current rating: {{ {1: 'Liked', -1: 'Disliked', 0: 'Neutral'}[current] }}")
+            st.caption("Current rating: " + {1: "Liked", -1: "Disliked", 0: "Neutral"}[current])
             buttons = st.columns(3)
             for col, title, value in zip(buttons, ["👍 Like", "👎 Dislike", "Clear rating"], [1, -1, 0]):
                 if col.button(title, key=f"rec_rate_{r['id']}_{value}",
