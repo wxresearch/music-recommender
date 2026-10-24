@@ -313,10 +313,13 @@ with tab5:
     if st.session_state.get("discovery_query") == (artist_name, track_name):
         found = st.session_state.get("discovery_results", [])
         if not found:
-            st.info("No matching recommendations found. Try another track or correct the artist name.")
+            st.info("No matches even after checking tags and related artists. Try another track or verify the artist and title.")
         for i, rec in enumerate(found, 1):
             st.markdown(f"**{i}. {rec['track']} — {rec['artist']}**")
-            st.caption(f"Last.fm match: {rec['lastfm_match']:.3f} (listening-data similarity, not CLAP)")
+            if rec["lastfm_match"] is not None:
+                st.caption(f"Last.fm similarity: {rec['lastfm_match']:.3f} · {rec['source']} (not CLAP)")
+            else:
+                st.caption(f"Discovered through {rec['source']} · not a CLAP-scored match")
             st.link_button("Search on Spotify", rec["spotify_url"])
             if rec["lastfm_url"].startswith("https://"):
                 st.markdown(f"[See on Last.fm]({rec['lastfm_url']})")
