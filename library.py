@@ -19,6 +19,7 @@ def connect():
     con.execute("""CREATE TABLE IF NOT EXISTS feedback (
         song_id TEXT PRIMARY KEY, preference INTEGER NOT NULL DEFAULT 0
     )""")
+    con.execute('CREATE TABLE IF NOT EXISTS similarity_feedback (song_a TEXT, song_b TEXT, rating INTEGER, PRIMARY KEY(song_a, song_b))')
     con.commit()
     return con
 
@@ -65,4 +66,18 @@ def delete_song(song_id):
             return
         con.execute("DELETE FROM songs WHERE id=?", (song_id,))
         con.execute("DELETE FROM feedback WHERE song_id=?", (song_id,))
+        con.execute("DELETE FROM similarity_feedback WHERE song_a=? OR song_b=?", (song_id, song_id))
         (AUDIO / (song_id + row["extension"])).unlink(missing_ok=True)
+
+
+def get_similarity_feedback():
+    with connect() as con:
+        return {(r['song_a'], r['song_b']): r['rating'] for r in con.execute('SELECT * FROM similarity_feedback')}
+
+
+def rate_similarity(a, b, rating):
+    if a == b or rating not in (1, 2, 3, 4, 5):
+        raise ValueError('Invalid similarity rating')
+    a, b = sorted((a, b))
+    with connect() as con:
+        con.execute('INSERT INTO similarity_feedback VALUES (?,?,?) ON CONFLICT(song_a,song_b) DO UPDATE SET rating=excluded.rating', (a,b,rating))
