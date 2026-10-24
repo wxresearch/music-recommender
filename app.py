@@ -98,31 +98,59 @@ with tab2:
         st.warning("Add one more song to get recommendations.")
     else:
         feedback = get_feedback()
-        weight = st.slider("Personalization strength", 0.0, 1.0, 0.35, 0.05,
-                           help="0 uses only acoustic similarity. Larger values "
-                                "favor liked songs and discourage disliked ones.")
+        mode_label = st.radio(
+            "Recommendation mode",
+            ["Find similar songs", "Recommended for you"],
+            horizontal=True,
+            help="Similarity compares songs with your selected track; "
+                 "For you uses your likes and dislikes to find unrated tracks.",
+        )
+        mode = "similar" if mode_label == "Find similar songs" else "personalized"
+        weight = 0.35
+        if mode == "personalized":
+            weight = st.slider(
+                "Personalization strength", 0.0, 1.0, 0.70, 0.05,
+                help="Higher values prioritize musical features shared with "
+                     "liked songs rather than similarity to the selected track.",
+            )
+            liked_count = sum(v == 1 for v in feedback.values())
+            disliked_count = sum(v == -1 for v in feedback.values())
+            st.caption(f"Your profile: {liked_count} liked, {disliked_count} disliked.")
+            if not liked_count and not disliked_count:
+                st.info("Rate a few songs first. For now, recommendations use acoustic similarity.")
         records = [{"id": s["id"], "title": s["title"], **s["features"]}
                    for s in library]
         results = recommendations(pd.DataFrame(records), sid, limit=10,
-                                  feedback=feedback, preference_weight=weight)
-        st.caption("Smaller acoustic distance means a closer match. "
-                   "Rank score also incorporates your likes/dislikes; "
-                   "these values are not match percentages.")
-        for _, r in results.iterrows():
-            item = next(s for s in library if s["id"] == r["id"])
-            st.markdown(f"**{r['title']}** · {r['tempo']:.0f} BPM · "
-                        f"acoustic distance {r['acoustic_distance']:.2f} · "
-                        f"rank score {r['rank_score']:.2f}")
+                                  feedback=feedback, preference_weight=weight,
+                                  mode=mode)
+        if results.empty:
+            st.info("No unrated songs left to discover. Upload more tracks, or "
+                    "clear a rating under Library & preferences.")
+        elif mode == "similar":
+            st.caption("Closest acoustic matches to the selected track. "
+                       "Smaller distance is better; not a probability.")
+        else:
+            st.caption("Unrated tracks ranked using your likes and dislikes. "
+                       "Higher preference score is better; not a probability.")
+        for _, rec in results.iterrows():
+            item = next(s for s in library if s["id"] == rec["id"])
+            metric = (f"distance {rec['acoustic_distance']:.2f}"
+                      if mode == "similar"
+                      else f"preference score {rec['rank_score']:.3f}")
+            st.markdown(f"**{rec['title']}** · {rec['tempo']:.0f} BPM · {metric}")
             st.audio(str(item["path"]))
-            current = feedback.get(r["id"], 0)
-            st.caption("Current rating: " + {1: "Liked", -1: "Disliked", 0: "Neutral"}[current])
+            current = feedback.get(rec["id"], 0)
+            st.caption("Current rating: " +
+                       {1: "Liked", -1: "Disliked", 0: "Neutral"}[current])
             buttons = st.columns(3)
-            for col, title, value in zip(buttons, ["👍 Like", "👎 Dislike", "Clear rating"], [1, -1, 0]):
-                if col.button(title, key=f"rec_rate_{r['id']}_{value}",
+            for col, title, value in zip(
+                buttons, ["👍 Like", "👎 Dislike", "Clear rating"], [1, -1, 0]
+            ):
+                if col.button(title, key=f"rec_rate_{rec['id']}_{value}",
                               disabled=current == value):
-                    set_feedback(r["id"], value)
+                    set_feedback(rec["id"], value)
                     st.rerun()
-        st.caption("Ratings are saved immediately. Changing a rating recalculates the recommendations.")
+        st.caption("Ratings save immediately and rerank the results.")
 
 with tab3:
     st.subheader("Saved music library")
