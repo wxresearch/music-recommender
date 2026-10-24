@@ -67,7 +67,7 @@ sid = selection["id"]
 features = selection["features"]
 st.audio(str(selection["path"]))
 
-tab1, tab2, tab3, tab4 = st.tabs(["Analysis", "Recommendations", "Library & preferences", "Evaluation"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Analysis", "Recommendations", "Library & preferences", "Evaluation", "Online Discovery"])
 with tab1:
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Estimated tempo", f"{features['tempo']:.0f} BPM")
@@ -264,3 +264,59 @@ with tab4:
             st.subheader("Rated pair comparisons")
             st.dataframe(pair_data.round(3), hide_index=True, use_container_width=True)
             st.bar_chart(summary.set_index("Method")["Spearman correlation"])
+
+with tab5:
+    st.subheader("Discover songs online")
+    st.caption("Find similar tracks using Last.fm listening data, then open a "
+               "Spotify search to listen. These results are not CLAP audio comparisons.")
+    import os
+    from online_discovery import find_similar_tracks
+    api_key = os.environ.get("LASTFM_API_KEY", "")
+    try:
+        api_key = st.secrets.get("LASTFM_API_KEY", api_key)
+    except (FileNotFoundError, KeyError):
+        pass
+    if not api_key:
+        st.info("Set LASTFM_API_KEY in Windows CMD before launching the app, "
+                "or add it to Streamlit secrets. Get a free API key at "
+                "https://www.last.fm/api/account/create.")
+    liked_songs = [song for song in library if get_feedback().get(song["id"]) == 1]
+    source_choices = ["Selected song"] + (["One of my liked songs"] if liked_songs else [])
+    discovery_source = st.radio("Discover based on", source_choices,
+                                horizontal=True, key="discovery_source")
+    source_song = selection
+    if discovery_source == "One of my liked songs":
+        source_song = st.selectbox("Choose a favorite", liked_songs,
+                                   format_func=lambda x: x["title"],
+                                   key="discovery_favorite")
+    filename = Path(source_song["title"]).stem
+    # Artist and title order differs across music libraries: both remain editable.
+    guess_parts = filename.split(" - ", 1)
+    suggested_track = guess_parts[0].strip()
+    suggested_artist = guess_parts[1].strip() if len(guess_parts) > 1 else ""
+    with st.form("lastfm_discovery_form"):
+        artist_name = st.text_input("Artist", value=suggested_artist)
+        track_name = st.text_input("Track title", value=suggested_track)
+        count = st.slider("Number of suggestions", 5, 30, 15, 5)
+        discover = st.form_submit_button("Find new songs")
+    if discover:
+        if not api_key:
+            st.error("Add a Last.fm API key first.")
+        else:
+            try:
+                with st.spinner("Finding similar tracks on Last.fm..."):
+                    found = find_similar_tracks(artist_name, track_name, api_key, count)
+                st.session_state["discovery_results"] = found
+                st.session_state["discovery_query"] = (artist_name, track_name)
+            except Exception as exc:
+                st.error(f"Online discovery failed: {exc}")
+    if st.session_state.get("discovery_query") == (artist_name, track_name):
+        found = st.session_state.get("discovery_results", [])
+        if not found:
+            st.info("No matching recommendations found. Try another track or correct the artist name.")
+        for i, rec in enumerate(found, 1):
+            st.markdown(f"**{i}. {rec['track']} — {rec['artist']}**")
+            st.caption(f"Last.fm match: {rec['lastfm_match']:.3f} (listening-data similarity, not CLAP)")
+            st.link_button("Search on Spotify", rec["spotify_url"])
+            if rec["lastfm_url"].startswith("https://"):
+                st.markdown(f"[See on Last.fm]({rec['lastfm_url']})")
