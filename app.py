@@ -74,6 +74,8 @@ with tab1:
     c2.metric("RMS energy", f"{features['rms']:.4f}")
     c3.metric("Spectral brightness", f"{features['brightness']:.0f} Hz")
     c4.metric("Duration analyzed", f"{features['duration']:.1f} seconds")
+    if "beat_regularity" in features:
+        st.caption(f"Detected beats: {features['beat_count']} · Beat regularity: {features['beat_regularity']:.2f} (0–1)")
     with st.spinner("Generating visualizations"):
         waveform, spectrum, freq, times = visualization_cached(
             str(selection["path"]), selection["path"].stat().st_mtime_ns)
@@ -151,6 +153,35 @@ with tab2:
                     set_feedback(rec["id"], value)
                     st.rerun()
         st.caption("Ratings save immediately and rerank the results.")
+        st.divider()
+        st.subheader("AI audio embeddings (experimental)")
+        st.caption("Try a pretrained CLAP model to find similar-sounding music. "
+                   "First run downloads the model and analyzes each saved track. "
+                   "This is optional, separate from the default feature-based recommender.")
+        if st.button("Generate AI recommendations", key="run_clap"):
+            try:
+                from ai_embeddings import ai_recommendations
+                with st.spinner("Computing or loading local audio embeddings..."):
+                    ai_results = ai_recommendations(
+                        library, sid, feedback=get_feedback(),
+                        mode=mode, weight=weight, limit=10)
+                st.session_state["ai_results"] = ai_results
+                st.session_state["ai_context"] = (sid, mode, tuple(sorted(get_feedback().items())), weight)
+            except ImportError:
+                st.error("AI dependencies missing. In CMD run: python -m pip install -r requirements-ai.txt")
+            except Exception as exc:
+                st.error(f"AI analysis failed: {exc}")
+        context = (sid, mode, tuple(sorted(get_feedback().items())), weight)
+        if st.session_state.get("ai_context") == context:
+            ai_results = st.session_state.get("ai_results", [])
+            if not ai_results:
+                st.info("No eligible unrated songs remain. Add tracks or change ratings.")
+            for rec in ai_results:
+                st.markdown(f"**{rec['title']}** · CLAP cosine similarity {rec['cosine_similarity']:.3f} "
+                            f"· rank score {rec['rank_score']:.3f}")
+                matched_song = next(s for s in library if s["id"] == rec["id"])
+                st.audio(str(matched_song["path"]))
+
 
 with tab3:
     st.subheader("Saved music library")
