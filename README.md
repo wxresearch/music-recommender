@@ -7,7 +7,8 @@ A Python app that analyzes audio and recommends music using acoustic features, l
 - Analyze tempo, rhythm, timbre, waveforms, and spectrograms.
 - Find acoustically similar songs or get recommendations based on likes and dislikes.
 - Save your music library and ratings locally.
-- Try AI-powered recommendations using pretrained CLAP audio embeddings.
+- Try hybrid recommendations combining three CLAP audio segments with acoustic features.
+- Rate how similar two songs sound (1–5), separately from Like/Dislike.
 
 ## Getting started
 
@@ -30,7 +31,7 @@ To try the optional AI recommender:
 python -m pip install -r requirements-ai.txt
 ```
 
-Restart the app and choose **Generate AI recommendations**. The pretrained model downloads on first use.
+Restart the app, adjust **Acoustic feature contribution**, then choose **Generate AI recommendations**. The first run downloads the model and recalculates cached embeddings. Pairwise similarity ratings influence subsequent AI rankings.
 
 ## Updating
 
