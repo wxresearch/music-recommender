@@ -134,12 +134,27 @@ with tab3:
         "Preference": {1: "Liked", -1: "Disliked", 0: "Neutral"}.get(
             feedback.get(s["id"], 0))
     } for s in library]), hide_index=True)
-    selected_preference = st.radio("Rate selected song", ["Neutral", "Like", "Dislike"],
-                                   horizontal=True,
-                                   index={0: 0, 1: 1, -1: 2}.get(feedback.get(sid, 0), 0))
-    if st.button("Save rating"):
-        set_feedback(sid, {"Neutral": 0, "Like": 1, "Dislike": -1}[selected_preference])
-        st.success("Preference saved.")
+    st.subheader("Rate any song")
+    rating_song = st.selectbox(
+        "Choose a song to like or dislike",
+        library,
+        format_func=lambda s: s["title"],
+        key="rating_song_selector",
+    )
+    rating_id = rating_song["id"]
+    current_rating = feedback.get(rating_id, 0)
+    rating_options = ["Neutral", "Like", "Dislike"]
+    with st.form(key=f"rating_form_{rating_id}"):
+        selected_preference = st.radio(
+            "Your rating for this song",
+            rating_options,
+            horizontal=True,
+            index={0: 0, 1: 1, -1: 2}[current_rating],
+        )
+        save_rating = st.form_submit_button("Save rating")
+    if save_rating:
+        set_feedback(rating_id, {"Neutral": 0, "Like": 1, "Dislike": -1}[selected_preference])
+        st.rerun()
     st.warning("Removing a song deletes the locally stored audio copy and its rating.")
     if st.button("Delete selected song"):
         delete_song(sid)
