@@ -4,3 +4,4 @@ __pycache__/
 .streamlit/secrets.toml
 demo_tracks/
 .DS_Store
+library_data/
