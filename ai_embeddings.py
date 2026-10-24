@@ -26,36 +26,58 @@ def _model():
 
 
 def embedding_for(song):
-    """Compute once per local song ID and reuse from disk."""
+    """Average beginning, middle and end CLAP embeddings; cache v2."""
     EMBED_DIR.mkdir(parents=True, exist_ok=True)
-    target = EMBED_DIR / (song["id"] + ".npy")
+    target = EMBED_DIR / (song["id"] + "_v2.npy")
     if target.exists():
-        return np.load(target)
+        return np.load(target, allow_pickle=False)
     processor, model, torch = _model()
-    # CLAP accepts 48 kHz audio; keep a 10-second segment for quick local use.
-    audio, _ = librosa.load(str(song["path"]), sr=48000, mono=True, duration=10)
-    if len(audio) < 48000:
-        raise ValueError("Audio too short for AI embedding")
-    inputs = processor(audios=[audio], sampling_rate=48000, return_tensors="pt")
-    with torch.no_grad():
-        vec = model.get_audio_features(**inputs)
-    # Transformers versions may expose a tensor or a model output.
-    if not isinstance(vec, torch.Tensor):
-        vec = getattr(vec, "pooler_output", vec[0])
-    arr = np.asarray(vec.detach().cpu().numpy()[0], dtype="float32")
-    arr /= max(float(np.linalg.norm(arr)), 1e-12)
-    np.save(target, arr)
-    return arr
+    audio, sr = librosa.load(str(song["path"]), sr=48000, mono=True, duration=180)
+    if len(audio) < sr:
+        raise ValueError("Audio too short")
+    duration = len(audio) / sr
+    starts = sorted(set(round(x, 2) for x in
+                        (0, max(0, (duration - 10) / 2), max(0, duration - 10))))
+    vectors = []
+    for start in starts:
+        clip = audio[int(start * sr):int((start + 10) * sr)]
+        inputs = processor(audios=[clip], sampling_rate=sr, return_tensors="pt")
+        with torch.no_grad():
+            vec = model.get_audio_features(**inputs)
+        if not isinstance(vec, torch.Tensor):
+            vec = getattr(vec, "pooler_output", vec[0])
+        arr = np.asarray(vec.detach().cpu().numpy()[0], dtype="float32")
+        arr /= max(float(np.linalg.norm(arr)), 1e-12)
+        vectors.append(arr)
+    mean = np.mean(vectors, axis=0).astype("float32")
+    mean /= max(float(np.linalg.norm(mean)), 1e-12)
+    np.save(target, mean)
+    return mean
 
 
 def ai_recommendations(library, selected_id, feedback=None, mode="similar",
-                       weight=0.7, limit=10):
+                       weight=0.7, limit=10, acoustic_weight=0.25, pair_ratings=None):
     """Rank with CLAP embedding cosine similarity, optionally user ratings."""
     feedback = feedback or {}
     vecs = np.stack([embedding_for(song) for song in library])
     ids = [song["id"] for song in library]
     idx = ids.index(selected_id)
     similarity = vecs @ vecs[idx]
+    from recommender import _embedding
+    import pandas as pd
+    features = pd.DataFrame([s["features"] for s in library])
+    z = _embedding(features)
+    dist = np.linalg.norm(z - z[idx], axis=1)
+    nonzero = dist[dist > 1e-8]
+    scale = max(float(np.median(nonzero)), 1.0) if len(nonzero) else 1.0
+    acoustic = np.exp(-dist / scale)
+    blend = float(np.clip(acoustic_weight, 0, 1))
+    hybrid = (1 - blend) * ((similarity + 1) / 2) + blend * acoustic
+    pair_ratings = pair_ratings or {}
+    bonus = np.array([(pair_ratings.get(tuple(sorted((selected_id, sid))), 0) - 3) / 2
+                       if pair_ratings.get(tuple(sorted((selected_id, sid))), 0) else 0
+                       for sid in ids])
+    hybrid += 0.12 * bonus
     if mode == "personalized":
         likes = [i for i, sid in enumerate(ids) if feedback.get(sid) == 1]
         dislikes = [i for i, sid in enumerate(ids) if feedback.get(sid) == -1]
@@ -65,16 +87,17 @@ def ai_recommendations(library, selected_id, feedback=None, mode="similar",
                 taste += np.mean(vecs @ vecs[likes].T, axis=1)
             if dislikes:
                 taste -= np.mean(vecs @ vecs[dislikes].T, axis=1)
-            scores = (1 - weight) * similarity + weight * taste
+            scores = (1 - weight) * hybrid + weight * ((taste + 1) / 2)
             allowed = [i for i, sid in enumerate(ids)
                        if i != idx and feedback.get(sid, 0) == 0]
         else:
-            scores = similarity.copy()
+            scores = hybrid.copy()
             allowed = [i for i in range(len(ids)) if i != idx]
     else:
-        scores = similarity.copy()
+        scores = hybrid.copy()
         allowed = [i for i in range(len(ids)) if i != idx]
     allowed.sort(key=lambda i: float(scores[i]), reverse=True)
     return [{"id": ids[i], "title": library[i]["title"],
              "cosine_similarity": float(similarity[i]),
+             "hybrid_score": float(hybrid[i]),
              "rank_score": float(scores[i])} for i in allowed[:limit]]
