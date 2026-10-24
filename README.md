@@ -9,21 +9,21 @@ A local, content-based music analyzer and recommender. Upload audio recordings, 
 - Inspect song features, listen to uploaded recordings, and compare recommendations.
 - Generate four synthetic WAV examples for testing without copyrighted music.
 
-## Quick start (Windows PowerShell)
+## Quick start (Windows Command Prompt)
 
 Python 3.11 or 3.12 recommended.
 
-```powershell
+```bat
 git clone https://github.com/wxresearch/music-recommender.git
 cd music-recommender
 py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
+.venv\Scripts\activate.bat
 python -m pip install -r requirements.txt
 python demo_audio.py
 streamlit run app.py
 ```
 
-If PowerShell blocks activation, use `.venv\Scripts\python.exe -m pip install -r requirements.txt` and `.venv\Scripts\python.exe -m streamlit run app.py`.
+Use **Command Prompt (cmd.exe)**, not PowerShell. If Python 3.11 is not installed, use `py -3.12 -m venv .venv` if Python 3.12 is available. To run without activating the environment, use `.venv\Scripts\python.exe -m pip install -r requirements.txt` and `.venv\Scripts\python.exe -m streamlit run app.py`.
 
 Upload the four generated WAV files from `demo_tracks/` or your own authorized audio recordings. Select any track to view its features and nearest neighbors.
 
