@@ -78,3 +78,31 @@ Evaluate recommendations on a labeled song set, consider pretrained embeddings, 
 ```cmd
 python -m unittest discover -s tests
 ```
+
+## Experimental pretrained audio embeddings
+
+The default recommender continues to use librosa features and works without PyTorch.
+An optional **AI audio embeddings** section is available in the Recommendations tab.
+It uses the pretrained `laion/clap-htsat-unfused` CLAP model to embed the first
+10 seconds of each local audio file at 48 kHz, caches vectors under
+`library_data/embeddings/`, and ranks with cosine similarity. In personalized
+mode, likes and dislikes affect the AI score and previously rated tracks are
+excluded from discovery.
+
+Install the optional dependencies from Windows **Command Prompt**:
+
+```cmd
+python -m pip install -r requirements-ai.txt
+python -m streamlit run app.py
+```
+
+Then press **Generate AI recommendations** in the Recommendations tab.
+The first run requires an internet connection to download model weights and
+may consume significant disk space and memory; CPU inference can be slow.
+Model availability and compatibility depend on installed PyTorch/Transformers
+versions. The AI path is experimental and has not been validated on every
+Windows/Python combination.
+
+The 10-second embedding window is deliberately short for a first prototype;
+future iterations should compare several segments and evaluate ranking against
+human similarity judgments. A cosine value is not a match percentage.
