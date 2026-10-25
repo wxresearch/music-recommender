@@ -13,6 +13,7 @@ from recommender import recommendations
 from smart_features import explain_match, surprise_me, text_recommendations
 from explore import parse_title, cover_for, taste_summary, music_map, mood_search, closest_section
 from visualizations import overview
+from intelligence import learned_taste, blended_taste_results, tag_songs, generate_playlist, cluster_descriptions, export_backup, restore_backup
 
 def song_label(song):
     return f"{song['title']} — {song['artist']}" if song.get("artist") else song["title"]
@@ -130,11 +131,17 @@ with tab2:
             st.caption(f"Your profile: {liked_count} liked, {disliked_count} disliked.")
             if not liked_count and not disliked_count:
                 st.info("Rate a few songs first. For now, recommendations use acoustic similarity.")
+        learned = learned_taste(library, feedback) if mode == "personalized" else None
+        if mode == "personalized":
+            st.caption("🧠 Taste learning: " + ("trained from your likes and dislikes" if learned else
+                       "needs at least 4 ratings covering both liked and disliked songs"))
         records = [{"id": s["id"], "title": s["title"], **s["features"]}
                    for s in library]
         results = recommendations(pd.DataFrame(records), sid, limit=10,
                                   feedback=feedback, preference_weight=weight,
                                   mode=mode)
+        if mode == "personalized" and learned is not None:
+            results, _ = blended_taste_results(library, sid, feedback)
         if results.empty:
             st.info("No unrated songs left to discover. Upload more tracks, or "
                     "clear a rating under Library & preferences.")
@@ -148,7 +155,7 @@ with tab2:
             item = next(s for s in library if s["id"] == rec["id"])
             metric = (f"distance {rec['acoustic_distance']:.2f}"
                       if mode == "similar"
-                      else f"preference score {rec['rank_score']:.3f}")
+                      else (f"learned score {rec['learned_score']:.3f}" if "learned_score" in rec else f"preference score {rec['rank_score']:.3f}"))
             st.markdown(f"**{rec['title']}** · {rec['tempo']:.0f} BPM · {metric}")
             st.audio(str(item["path"]))
             st.caption("Why this recommendation? " + " · ".join(explain_match(selection, item)))
@@ -423,6 +430,21 @@ with tab6:
         st.dataframe(profile.round(3))
         st.caption("Averages by rating, in each feature's original units.")
     st.divider()
+    st.subheader("🏷️ AI genre and mood tags")
+    st.caption("CLAP estimates the closest matching labels. These are predictions, not verified genres.")
+    if st.button("Analyze genre & mood", key="run_tags"):
+        try:
+            with st.spinner("Classifying local audio with CLAP..."):
+                st.session_state["music_tags"] = tag_songs(library)
+        except Exception as exc:
+            st.error("Tag analysis failed: " + str(exc))
+    known_tags = st.session_state.get("music_tags", {})
+    if known_tags:
+        rows = [{"Song": song_label(song), "Genre": known_tags[song["id"]]["genre"],
+                 "Mood": known_tags[song["id"]]["mood"]}
+                for song in library if song["id"] in known_tags]
+        st.dataframe(pd.DataFrame(rows), hide_index=True)
+    st.divider()
     st.subheader("🪐 Music Universe")
     st.caption("Each dot represents a song. Nearby dots tend to sound alike. The two hidden axes are just mathematical coordinates, not musical properties or genres.")
     use_clap = st.checkbox("Use CLAP audio embeddings", value=True)
@@ -447,14 +469,18 @@ with tab6:
             group_count = min(4, max(2, len(data)//8))
             labels = KMeans(n_clusters=group_count, n_init=10, random_state=5).fit_predict(
                 StandardScaler().fit_transform(coords))
-            data["Sound group"] = ["Cluster " + str(v+1) for v in labels]
+            cluster_names = {}
+            for v in range(group_count):
+                member_ids = [song_id for song_id, label in zip(data["id"], labels) if label == v]
+                cluster_names[v] = f"Cluster {v+1} · " + cluster_descriptions(library, member_ids, known_tags)
+            data["Sound group"] = [cluster_names[int(v)] for v in labels]
             ratings = get_feedback()
             data["Preference"] = [{1:"Liked", -1:"Disliked", 0:"Unrated"}.get(ratings.get(k,0)) for k in data["id"]]
             fig = px.scatter(
                 data, x="x", y="y", color="Sound group",
                 hover_name="title", custom_data=["id"],
                 hover_data={"Preference": True, "x": False, "y": False, "Sound group": False},
-                category_orders={"Sound group": [f"Cluster {i+1}" for i in range(group_count)]},
+                category_orders={"Sound group": [cluster_names[i] for i in range(group_count)]},
                 color_discrete_sequence=["#78CDE8", "#B7A5E8", "#EAAE83", "#8ED5B0"],
                 template="plotly_dark")
             fig.update_traces(marker=dict(size=15, opacity=0.9,
@@ -479,7 +505,7 @@ with tab6:
                 selection_mode="points", key="music_universe",
                 config={"displaylogo": False,
                         "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"]})
-            st.caption("Colors indicate automatically grouped sounds, not genres. Hover for song names and ratings; click a dot to listen.")
+            st.caption("Sound groups use nearby map positions. If you analyze tags above, each group also shows its dominant predicted genre and mood.")
             if event.selection.points:
                 chosen_id = event.selection.points[0]["customdata"][0]
                 matched = next((item for item in library if item["id"] == chosen_id), None)
@@ -532,3 +558,67 @@ with tab8:
                 delete_playlist(pl["id"])
                 st.rerun()
 
+
+    st.divider()
+    st.subheader("✨ Generate a playlist with AI")
+    st.caption("Describe a vibe. CLAP finds local tracks and balances matching your prompt with variety.")
+    with st.form("generate_playlist_form"):
+        prompt = st.text_input("Describe your playlist", placeholder="Relaxing atmospheric music for late-night studying")
+        name = st.text_input("Save as", value="AI Mix")
+        count = st.slider("Number of tracks", 2, min(30, max(2, len(library))), min(10, max(2, len(library))))
+        generate = st.form_submit_button("Generate playlist")
+    if generate:
+        if not prompt.strip():
+            st.warning("Describe your playlist first.")
+        else:
+            try:
+                with st.spinner("Selecting and balancing tracks..."):
+                    picked = generate_playlist(library, prompt.strip(), count, feedback=get_feedback())
+                st.session_state["generated_playlist_ids"] = [s["id"] for s in picked]
+                st.session_state["generated_playlist_name"] = name
+            except Exception as exc:
+                st.error("Could not generate playlist: " + str(exc))
+    chosen_ids = st.session_state.get("generated_playlist_ids", [])
+    if chosen_ids:
+        st.write("Suggested tracks:")
+        for item in library:
+            if item["id"] in chosen_ids:
+                st.write("• " + song_label(item))
+        if st.button("Save generated playlist"):
+            try:
+                playlist_name = st.session_state.get("generated_playlist_name", "AI Mix").strip() or "AI Mix"
+                from sqlite3 import IntegrityError
+                try:
+                    create_playlist(playlist_name)
+                except IntegrityError:
+                    pass
+                playlist = next(p for p in list_playlists() if p["name"] == playlist_name)
+                for song_id in chosen_ids:
+                    add_to_playlist(playlist["id"], song_id)
+                st.success("Playlist saved to your local library.")
+            except Exception as exc:
+                st.error("Could not save playlist: " + str(exc))
+    st.divider()
+    st.subheader("💾 Backup and restore")
+    st.caption("Download your local songs, ratings, playlists and discoveries as a ZIP. No API secrets are included.")
+    if st.button("Prepare backup"):
+        try:
+            with st.spinner("Packaging local library..."):
+                st.session_state["backup_zip"] = export_backup()
+        except Exception as exc:
+            st.error("Backup failed: " + str(exc))
+    if "backup_zip" in st.session_state:
+        st.download_button("⬇️ Download library backup", st.session_state["backup_zip"],
+                           file_name="music-recommender-backup.zip", mime="application/zip")
+    restore_file = st.file_uploader("Restore from a Music Recommender backup ZIP", type=["zip"], key="restore_zip")
+    if restore_file is not None:
+        st.caption("Restore merges missing songs and metadata without replacing existing entries.")
+        confirm = st.checkbox("I want to merge this backup into my local library")
+        if st.button("Restore backup", disabled=not confirm):
+            try:
+                with st.spinner("Verifying and restoring backup..."):
+                    added = restore_backup(restore_file.getvalue())
+                st.success(f"Restore complete. Imported {added} new songs; existing songs were kept.")
+                st.rerun()
+            except Exception as exc:
+                st.error("Restore failed: " + str(exc))
