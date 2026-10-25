@@ -20,7 +20,7 @@ h1,h2,h3 {letter-spacing: -.02em;}
 div.stButton>button, div.stLinkButton>a {border-radius: 12px;}
 div[data-testid="stMetric"] {padding: 12px; border-radius: 14px; background:rgba(122,100,195,.08);}
 </style>""", unsafe_allow_html=True)
-st.title("🎧 Music Recommender")
+st.title("🎵 Music Recommender")
 st.caption("Local song analysis, persistent library, and personalized recommendations.")
 
 
