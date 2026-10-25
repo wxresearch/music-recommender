@@ -8,9 +8,9 @@ import pandas as pd
 import streamlit as st
 
 from analyzer import analyze_audio
-from library import add_song, delete_song, get_feedback, set_feedback, songs, get_similarity_feedback, rate_similarity, saved_discoveries, set_discovery_status, update_song_metadata, create_playlist, list_playlists, playlist_song_ids, add_to_playlist, remove_from_playlist, delete_playlist, record_play, listening_stats
+from library import add_song, delete_song, get_feedback, set_feedback, songs, get_similarity_feedback, rate_similarity, saved_discoveries, set_discovery_status, update_song_metadata, create_playlist, list_playlists, playlist_song_ids, add_to_playlist, remove_from_playlist, delete_playlist
 from recommender import recommendations
-from smart_features import explain_match, surprise_me, duplicate_candidates, text_recommendations
+from smart_features import explain_match, surprise_me, text_recommendations
 from explore import parse_title, cover_for, taste_summary, music_map, mood_search, closest_section
 from visualizations import overview
 
@@ -77,7 +77,7 @@ sid = selection["id"]
 features = selection["features"]
 st.audio(str(selection["path"]))
 
-tab1, tab2, tab3, tab5, tab6, tab8, tab9 = st.tabs(["🎼 Analysis", "✨ Recommendations", "💜 Library & Preferences", "🌍 Online Discovery", "🪐 Taste & Map", "📁 Playlists", "📊 Listening & Tools"])
+tab1, tab2, tab3, tab5, tab6, tab8 = st.tabs(["🎼 Analysis", "✨ Recommendations", "💜 Library & Preferences", "🌍 Online Discovery", "🪐 Taste & Map", "📁 Playlists"])
 with tab1:
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Estimated tempo", f"{features['tempo']:.0f} BPM")
@@ -532,44 +532,3 @@ with tab8:
                 delete_playlist(pl["id"])
                 st.rerun()
 
-with tab9:
-    st.subheader("📊 Listening statistics")
-    st.caption("The audio player's Play button does not report playback to Streamlit. "
-               "Use Mark as played to record songs you actually listened to.")
-    played = st.selectbox("Song you listened to", library,
-                          format_func=song_label, key="played_song")
-    if st.button("▶ Mark as played"):
-        record_play(played["id"])
-        st.rerun()
-    counts, recent = listening_stats()
-    st.metric("Listening sessions recorded", sum(counts.values()))
-    top = sorted(library, key=lambda item: counts.get(item["id"], 0), reverse=True)
-    top = [item for item in top if counts.get(item["id"], 0) > 0]
-    if top:
-        st.subheader("Most played")
-        st.bar_chart(pd.DataFrame({"Song": [song_label(song) for song in top[:12]],
-                                   "Plays": [counts[song["id"]] for song in top[:12]]}).set_index("Song"))
-        st.subheader("Recent listening")
-        by_id = {song["id"]: song for song in library}
-        st.dataframe(pd.DataFrame([{"Song": song_label(by_id[e["song_id"]]),
-                                   "When": e["played_at"]} for e in recent
-                                  if e["song_id"] in by_id]), hide_index=True)
-    else:
-        st.info("No plays recorded yet.")
-    st.divider()
-    st.subheader("🔍 Possible duplicate recordings")
-    st.caption("Uses audio feature similarity and analyzed duration to suggest pairs for review. "
-               "It is not proof the files are identical; nothing is deleted automatically.")
-    if st.button("Scan my library for possible duplicates"):
-        st.session_state["duplicate_matches"] = duplicate_candidates(library)
-    if "duplicate_matches" in st.session_state:
-        candidates = st.session_state["duplicate_matches"]
-        if not candidates:
-            st.success("No strong near-duplicate candidates found.")
-        else:
-            for first, second, distance in candidates:
-                st.write(song_label(first) + " ↔ " + song_label(second))
-                st.caption("Acoustic feature distance: " + format(distance, ".3f"))
-                a, b = st.columns(2)
-                a.audio(str(first["path"]))
-                b.audio(str(second["path"]))
