@@ -120,7 +120,7 @@ def export_backup():
     records = {}
     with connect() as con:
         for table in ["songs", "feedback", "similarity_feedback", "discoveries",
-                      "playlists", "playlist_songs", "listening_events"]:
+                      "playlists", "playlist_songs", "listening_events", "ai_tags"]:
             records[table] = [dict(row) for row in con.execute(f"SELECT * FROM {table}")]
     payload = io.BytesIO()
     with zipfile.ZipFile(payload, "w", zipfile.ZIP_DEFLATED) as z:
@@ -189,5 +189,9 @@ def restore_backup(content):
                 if row["song_id"] in valid_ids and row["playlist_id"] in mapping:
                     con.execute("INSERT OR IGNORE INTO playlist_songs(playlist_id,song_id) VALUES (?,?)",
                                 (mapping[row["playlist_id"]], row["song_id"]))
-            # Listening events are omitted in merge to prevent repeated imports doubling play counts.
+            for row in tables.get("ai_tags", []):
+                if row["song_id"] in valid_ids:
+                    con.execute("INSERT OR IGNORE INTO ai_tags(song_id,genre,mood) VALUES (?,?,?)",
+                                (row["song_id"], row["genre"], row["mood"]))
+            # Listening events are intentionally omitted to avoid doubling counts.
     return sum(row["id"] not in existing for row, _ in incoming)
