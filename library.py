@@ -18,6 +18,12 @@ def connect():
     )""")
     if "artist" not in {row["name"] for row in con.execute("PRAGMA table_info(songs)")}:
         con.execute("ALTER TABLE songs ADD COLUMN artist TEXT NOT NULL DEFAULT ''")
+        # Migrate historical filenames in the form Track - Artist.ext.
+        for row in con.execute("SELECT id,title FROM songs").fetchall():
+            stem = Path(row["title"]).stem
+            track, artist = stem.split(" - ", 1) if " - " in stem else (stem, "")
+            con.execute("UPDATE songs SET title=?, artist=? WHERE id=?",
+                        (track.strip(), artist.strip(), row["id"]))
     con.execute("""CREATE TABLE IF NOT EXISTS feedback (
         song_id TEXT PRIMARY KEY, preference INTEGER NOT NULL DEFAULT 0
     )""")
@@ -35,8 +41,10 @@ def add_song(song_id, title, extension, content, features):
             return False
         # Files are local; do not store authentication data or upload audio to GitHub.
         (AUDIO / (song_id + extension)).write_bytes(content)
-        con.execute("INSERT INTO songs (id,title,extension,features) VALUES (?,?,?,?)",
-                    (song_id, title, extension, json.dumps(features)))
+        stem = Path(title).stem
+        track, artist = stem.split(" - ", 1) if " - " in stem else (stem, "")
+        con.execute("INSERT INTO songs (id,title,extension,features,artist) VALUES (?,?,?,?,?)",
+                    (song_id, track.strip(), extension, json.dumps(features), artist.strip()))
     return True
 
 
