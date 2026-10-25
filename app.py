@@ -341,10 +341,23 @@ with tab5:
                 st.session_state["discovery_query"] = (artist_name, track_name)
             except Exception as exc:
                 st.error(f"Online discovery failed: {exc}")
-    if st.session_state.get("discovery_query") == (artist_name, track_name):
+    st.subheader("Mood discovery")
+    mood = st.selectbox("Mood", ["Dreamy piano", "Melancholic", "Energetic electronic", "Peaceful ambient", "Lo-fi", "Instrumental"])
+    if st.button("Find songs by mood"):
+        if not api_key:
+            st.warning("Configure LASTFM_API_KEY first.")
+        else:
+            try:
+                st.session_state["discovery_results"] = mood_search(mood, api_key)
+                st.session_state["discovery_query"] = ("mood", mood)
+            except Exception as exc:
+                st.error(str(exc))
+    if st.session_state.get("discovery_query") in ((artist_name, track_name), ("mood", mood)):
         found = st.session_state.get("discovery_results", [])
         if not found:
             st.info("No matches even after checking tags and related artists. Try another track or verify the artist and title.")
+        statuses = saved_discoveries()
+        found = [rec for rec in found if statuses.get((rec["artist"].casefold(), rec["track"].casefold()), {}).get("status") not in ("Not interested", "Already heard")]
         for i, rec in enumerate(found, 1):
             st.markdown(f"**{i}. {rec['track']} — {rec['artist']}**")
             if rec["lastfm_match"] is not None:
@@ -352,5 +365,10 @@ with tab5:
             else:
                 st.caption(f"Discovered through {rec['source']} · not a CLAP-scored match")
             st.link_button("Search on Spotify", rec["spotify_url"])
+            actions = st.columns(3)
+            for col, label in zip(actions, ["Saved", "Not interested", "Already heard"]):
+                if col.button(label, key="disc_" + str(i) + "_" + label):
+                    set_discovery_status(rec["artist"], rec["track"], label, rec["spotify_url"])
+                    st.rerun()
             if rec["lastfm_url"].startswith("https://"):
                 st.markdown(f"[See on Last.fm]({rec['lastfm_url']})")
