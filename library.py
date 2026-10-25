@@ -20,6 +20,7 @@ def connect():
         song_id TEXT PRIMARY KEY, preference INTEGER NOT NULL DEFAULT 0
     )""")
     con.execute('CREATE TABLE IF NOT EXISTS similarity_feedback (song_a TEXT, song_b TEXT, rating INTEGER, PRIMARY KEY(song_a, song_b))')
+    con.execute("CREATE TABLE IF NOT EXISTS discoveries (artist TEXT NOT NULL, track TEXT NOT NULL, status TEXT NOT NULL, url TEXT, PRIMARY KEY(artist, track))")
     con.commit()
     return con
 
@@ -81,3 +82,16 @@ def rate_similarity(a, b, rating):
     a, b = sorted((a, b))
     with connect() as con:
         con.execute('INSERT INTO similarity_feedback VALUES (?,?,?) ON CONFLICT(song_a,song_b) DO UPDATE SET rating=excluded.rating', (a,b,rating))
+
+def saved_discoveries():
+    with connect() as con:
+        return {(row["artist"].casefold(), row["track"].casefold()): dict(row)
+                for row in con.execute("SELECT * FROM discoveries")}
+
+
+def set_discovery_status(artist, track, status, url=""):
+    if status not in ("Saved", "Not interested", "Already heard"):
+        raise ValueError("Invalid status")
+    with connect() as con:
+        con.execute("INSERT INTO discoveries VALUES (?,?,?,?) ON CONFLICT(artist,track) DO UPDATE SET status=excluded.status, url=excluded.url",
+                    (artist, track, status, url))
