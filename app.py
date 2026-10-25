@@ -8,10 +8,13 @@ import pandas as pd
 import streamlit as st
 
 from analyzer import analyze_audio
-from library import add_song, delete_song, get_feedback, set_feedback, songs, get_similarity_feedback, rate_similarity, saved_discoveries, set_discovery_status
+from library import add_song, delete_song, get_feedback, set_feedback, songs, get_similarity_feedback, rate_similarity, saved_discoveries, set_discovery_status, update_song_metadata
 from recommender import recommendations
 from explore import parse_title, cover_for, taste_summary, music_map, mood_search, closest_section
 from visualizations import overview
+
+def song_label(song):
+    return f"{song['title']} — {song['artist']}" if song.get("artist") else song["title"]
 
 st.set_page_config(page_title="Music Recommender", page_icon="🎵", layout="wide")
 st.markdown("""<style>
@@ -68,7 +71,7 @@ if not library:
 st.sidebar.header("Your library")
 st.sidebar.write(f"{len(library)} recordings saved on this computer")
 selection = st.selectbox("Choose a song to analyze", library,
-                         format_func=lambda s: s["title"])
+                         format_func=song_label)
 sid = selection["id"]
 features = selection["features"]
 st.audio(str(selection["path"]))
@@ -205,7 +208,7 @@ with tab3:
     sort_mode = st.selectbox("Sort by", ["Title", "Favorites first", "Tempo (highest first)"])
     search_text = st.text_input("Search your songs", placeholder="Type a title...", key="library_search")
     matching = [song for song in library
-                if search_text.casefold().strip() in song["title"].casefold()]
+                if search_text.casefold().strip() in song_label(song).casefold()]
     if sort_mode == "Favorites first":
         matching.sort(key=lambda song: feedback.get(song["id"], 0), reverse=True)
     elif sort_mode == "Tempo (highest first)":
@@ -215,7 +218,7 @@ with tab3:
         current_rating = feedback.get(song["id"], 0)
         with st.container(border=True):
             title_col, like_col, dislike_col, clear_col = st.columns([5, 1.4, 1.4, 1.4], vertical_alignment="center")
-            artist, title = parse_title(song["title"])
+            artist, title = song.get("artist", ""), song["title"]
             title_col.markdown(f"**{title}**")
             if artist:
                 title_col.caption(artist)
@@ -223,6 +226,16 @@ with tab3:
             if cover:
                 title_col.image(cover, width=90)
             title_col.caption({1: "👍 Liked", -1: "👎 Disliked", 0: "Not rated"}[current_rating])
+            with title_col.expander("✏️ Edit title / artist"):
+                with st.form("edit_song_" + song["id"]):
+                    new_title = st.text_input("Song title", value=song["title"])
+                    new_artist = st.text_input("Artist", value=song.get("artist", ""))
+                    if st.form_submit_button("Save changes"):
+                        try:
+                            update_song_metadata(song["id"], new_title, new_artist)
+                            st.rerun()
+                        except ValueError as exc:
+                            st.error(str(exc))
             for col, label, value in (
                 (like_col, "👍 Like", 1),
                 (dislike_col, "👎 Dislike", -1),
@@ -271,7 +284,7 @@ with tab5:
         st.caption(f"Showing {len(matches)} of {len(library)} saved songs.")
         if matches:
             source_song = st.selectbox(
-                "Choose a song", matches, format_func=lambda x: x["title"],
+                "Choose a song", matches, format_func=song_label,
                 key="discovery_any_song")
         else:
             st.info("No songs match your search. Try a different title.")
@@ -283,11 +296,8 @@ with tab5:
                 format_func=lambda x: x["title"], key="discovery_favorite")
         else:
             st.info("You haven't liked any songs yet. Switch to All songs to browse your library.")
-    filename = Path(source_song["title"]).stem
-    # Artist and title order differs across music libraries: both remain editable.
-    guess_parts = filename.split(" - ", 1)
-    suggested_track = guess_parts[0].strip()
-    suggested_artist = guess_parts[1].strip() if len(guess_parts) > 1 else ""
+    suggested_track = source_song["title"]
+    suggested_artist = source_song.get("artist", "")
     with st.form("lastfm_discovery_form"):
         artist_name = st.text_input("Artist", value=suggested_artist)
         track_name = st.text_input("Track title", value=suggested_track)
@@ -455,7 +465,7 @@ with tab7:
     others = [item for item in library if item["id"] != sid]
     if others:
         other = st.selectbox("Compare selected song with", others,
-                             format_func=lambda item: item["title"])
+                             format_func=song_label)
         if st.button("Find closest passages"):
             try:
                 with st.spinner("Comparing sections..."):
