@@ -196,28 +196,27 @@ with tab2:
 with tab3:
     st.subheader("Saved music library")
     feedback = get_feedback()
-    st.dataframe(pd.DataFrame([{
-        "Song": s["title"], "Tempo (BPM)": round(s["features"]["tempo"]),
-        "Duration analyzed (s)": round(s["features"]["duration"], 1),
-        "Preference": {1: "Liked", -1: "Disliked", 0: "Neutral"}.get(
-            feedback.get(s["id"], 0))
-    } for s in library]), hide_index=True)
-    st.subheader("Rate any song")
-    rating_song = st.selectbox(
-        "Choose a song to like or dislike",
-        library,
-        format_func=lambda s: s["title"],
-        key="rating_song_selector",
-    )
-    rating_id = rating_song["id"]
-    current_rating = feedback.get(rating_id, 0)
-    st.write("**Current rating:** " + {1: "Liked 👍", -1: "Disliked 👎", 0: "Neutral"}[current_rating])
-    rate_cols = st.columns(3)
-    for col, title, value in zip(rate_cols, ["👍 Like", "👎 Dislike", "Clear rating"], [1, -1, 0]):
-        if col.button(title, key=f"library_rate_{rating_id}_{value}",
-                      disabled=current_rating == value):
-            set_feedback(rating_id, value)
-            st.rerun()
+    search_text = st.text_input("Search your songs", placeholder="Type a title...", key="library_search")
+    matching = [song for song in library
+                if search_text.casefold().strip() in song["title"].casefold()]
+    st.caption(f"Showing {len(matching)} of {len(library)} songs. Rate songs directly below.")
+    for song in matching:
+        current_rating = feedback.get(song["id"], 0)
+        with st.container(border=True):
+            title_col, like_col, dislike_col, clear_col = st.columns([5, 1.4, 1.4, 1.4], vertical_alignment="center")
+            title_col.markdown(f"**{song['title']}**")
+            title_col.caption({1: "👍 Liked", -1: "👎 Disliked", 0: "Not rated"}[current_rating])
+            for col, label, value in (
+                (like_col, "👍 Like", 1),
+                (dislike_col, "👎 Dislike", -1),
+                (clear_col, "Clear", 0),
+            ):
+                if col.button(label, key=f"library_rate_{song['id']}_{value}",
+                              disabled=current_rating == value, use_container_width=True):
+                    set_feedback(song["id"], value)
+                    st.rerun()
+    if not matching:
+        st.info("No songs match your search.")
     st.warning("Removing a song deletes the locally stored audio copy and its rating.")
     if st.button("Delete selected song"):
         delete_song(sid)
