@@ -33,9 +33,16 @@ def tag_songs(library):
     for song in library:
         audio = embedding_for(song)
         scores = vecs @ audio
+        mood_scores = scores[len(GENRES):]
+        order = np.argsort(mood_scores)[::-1]
+        # Include up to three high-ranking moods close to the best CLAP match.
+        # These are relative similarities, not calibrated probabilities.
+        selected = [MOODS[int(i)] for i in order[:3]
+                    if mood_scores[int(i)] >= mood_scores[int(order[0])] - 0.045]
         result[song["id"]] = {
             "genre": GENRES[int(np.argmax(scores[:len(GENRES)]))],
-            "mood": MOODS[int(np.argmax(scores[len(GENRES):]))],
+            "mood": selected[0],
+            "moods": selected,
         }
     return result
 
@@ -191,7 +198,7 @@ def restore_backup(content):
                                 (mapping[row["playlist_id"]], row["song_id"]))
             for row in tables.get("ai_tags", []):
                 if row["song_id"] in valid_ids:
-                    con.execute("INSERT OR IGNORE INTO ai_tags(song_id,genre,mood) VALUES (?,?,?)",
-                                (row["song_id"], row["genre"], row["mood"]))
+                    con.execute("INSERT OR IGNORE INTO ai_tags(song_id,genre,mood,moods) VALUES (?,?,?,?)",
+                                (row["song_id"], row["genre"], row["mood"], row.get("moods", "[]")))
             # Listening events are intentionally omitted to avoid doubling counts.
     return sum(row["id"] not in existing for row, _ in incoming)
