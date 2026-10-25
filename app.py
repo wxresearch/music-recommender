@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from analyzer import analyze_audio
-from library import add_song, delete_song, get_feedback, set_feedback, songs, get_similarity_feedback, rate_similarity, saved_discoveries, set_discovery_status, update_song_metadata, create_playlist, list_playlists, playlist_song_ids, add_to_playlist, remove_from_playlist, delete_playlist
+from library import add_song, delete_song, get_feedback, set_feedback, songs, get_similarity_feedback, rate_similarity, saved_discoveries, set_discovery_status, update_song_metadata, create_playlist, list_playlists, playlist_song_ids, add_to_playlist, remove_from_playlist, delete_playlist, get_ai_tags, save_ai_tags
 from recommender import recommendations
 from smart_features import explain_match, surprise_me, text_recommendations
 from explore import parse_title, cover_for, taste_summary, music_map, mood_search, closest_section
@@ -435,10 +435,12 @@ with tab6:
     if st.button("Analyze genre & mood", key="run_tags"):
         try:
             with st.spinner("Classifying local audio with CLAP..."):
-                st.session_state["music_tags"] = tag_songs(library)
+                generated_tags = tag_songs(library)
+                save_ai_tags(generated_tags)
+                st.session_state["music_tags"] = generated_tags
         except Exception as exc:
             st.error("Tag analysis failed: " + str(exc))
-    known_tags = st.session_state.get("music_tags", {})
+    known_tags = get_ai_tags()
     if known_tags:
         rows = [{"Song": song_label(song), "Genre": known_tags[song["id"]]["genre"],
                  "Mood": known_tags[song["id"]]["mood"]}
@@ -581,9 +583,10 @@ with tab8:
     chosen_ids = st.session_state.get("generated_playlist_ids", [])
     if chosen_ids:
         st.write("Suggested tracks:")
-        for item in library:
-            if item["id"] in chosen_ids:
-                st.write("• " + song_label(item))
+        by_id = {item["id"]: item for item in library}
+        for song_id in chosen_ids:
+            if song_id in by_id:
+                st.write("• " + song_label(by_id[song_id]))
         if st.button("Save generated playlist"):
             try:
                 playlist_name = st.session_state.get("generated_playlist_name", "AI Mix").strip() or "AI Mix"
