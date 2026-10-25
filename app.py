@@ -430,7 +430,7 @@ with tab6:
         st.dataframe(profile.round(3))
         st.caption("Averages by rating, in each feature's original units.")
     st.divider()
-    st.subheader("🏷️ AI genre and mood tags")
+    st.subheader("🏷️ AI Genre and Mood Tags")
     st.caption("CLAP estimates the closest matching labels. These are predictions, not verified genres.")
     if st.button("Analyze genre & mood", key="run_tags"):
         try:
