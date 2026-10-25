@@ -288,10 +288,18 @@ with tab5:
     )
     source_song = selection
     if discovery_source == "Any song in my library":
-        st.caption(f"Showing all {len(library)} saved songs.")
-        source_song = st.selectbox(
-            "Choose a song", library, format_func=lambda x: x["title"],
-            key="discovery_any_song")
+        song_search = st.text_input(
+            "Search your library", placeholder="Search by song title...",
+            key="discovery_song_search")
+        matches = [song for song in library
+                   if song_search.strip().casefold() in song["title"].casefold()]
+        st.caption(f"Showing {len(matches)} of {len(library)} saved songs.")
+        if matches:
+            source_song = st.selectbox(
+                "Choose a song", matches, format_func=lambda x: x["title"],
+                key="discovery_any_song")
+        else:
+            st.info("No songs match your search. Try a different title.")
     elif discovery_source == "Liked songs only":
         if liked_songs:
             st.caption(f"Showing {len(liked_songs)} liked songs out of {len(library)} total.")
