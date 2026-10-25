@@ -11,7 +11,7 @@ A Python app that analyzes audio and recommends music using acoustic features, l
 - Rate how similar two songs sound (1–5), separately from Like/Dislike.
 - Discover similar or mood-based songs, save discoveries, and export playlists.
 - Explore your taste dashboard and interactive music universe.
-- Create custom playlists, track listening sessions, and screen for duplicate recordings.
+- Create and manage custom playlists.
 - Search your local songs by natural-language description, try Surprise Me, and inspect recommendation explanations.
 
 ## Getting started
