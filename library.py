@@ -36,6 +36,8 @@ def connect():
         added_at TEXT DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY(playlist_id,song_id))""")
     con.execute("""CREATE TABLE IF NOT EXISTS ai_tags (song_id TEXT PRIMARY KEY, genre TEXT NOT NULL, mood TEXT NOT NULL)""")
+    if "moods" not in {row["name"] for row in con.execute("PRAGMA table_info(ai_tags)")}:
+        con.execute("ALTER TABLE ai_tags ADD COLUMN moods TEXT NOT NULL DEFAULT '[]'")
     con.execute("""CREATE TABLE IF NOT EXISTS listening_events (
         id INTEGER PRIMARY KEY AUTOINCREMENT, song_id TEXT NOT NULL,
         played_at TEXT DEFAULT CURRENT_TIMESTAMP)""")
@@ -192,13 +194,14 @@ def listening_stats():
 
 def get_ai_tags():
     with connect() as con:
-        return {row["song_id"]: {"genre": row["genre"], "mood": row["mood"]}
+        return {row["song_id"]: {"genre": row["genre"], "mood": row["mood"],
+                                 "moods": json.loads(row["moods"]) or [row["mood"]]}
                 for row in con.execute("SELECT * FROM ai_tags")}
 
 
 def save_ai_tags(tags):
     with connect() as con:
         for sid, tag in tags.items():
-            con.execute("INSERT INTO ai_tags(song_id,genre,mood) VALUES (?,?,?) "
-                        "ON CONFLICT(song_id) DO UPDATE SET genre=excluded.genre,mood=excluded.mood",
-                        (sid, tag["genre"], tag["mood"]))
+            con.execute("INSERT INTO ai_tags(song_id,genre,mood,moods) VALUES (?,?,?,?) "
+                        "ON CONFLICT(song_id) DO UPDATE SET genre=excluded.genre,mood=excluded.mood,moods=excluded.moods",
+                        (sid, tag["genre"], tag["mood"], json.dumps(tag.get("moods", [tag["mood"]]))))
