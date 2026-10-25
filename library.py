@@ -29,6 +29,15 @@ def connect():
     )""")
     con.execute('CREATE TABLE IF NOT EXISTS similarity_feedback (song_a TEXT, song_b TEXT, rating INTEGER, PRIMARY KEY(song_a, song_b))')
     con.execute("CREATE TABLE IF NOT EXISTS discoveries (artist TEXT NOT NULL, track TEXT NOT NULL, status TEXT NOT NULL, url TEXT, PRIMARY KEY(artist, track))")
+    con.execute("""CREATE TABLE IF NOT EXISTS playlists (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)""")
+    con.execute("""CREATE TABLE IF NOT EXISTS playlist_songs (
+        playlist_id INTEGER NOT NULL, song_id TEXT NOT NULL,
+        added_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY(playlist_id,song_id))""")
+    con.execute("""CREATE TABLE IF NOT EXISTS listening_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, song_id TEXT NOT NULL,
+        played_at TEXT DEFAULT CURRENT_TIMESTAMP)""")
     con.commit()
     return con
 
@@ -77,6 +86,8 @@ def delete_song(song_id):
             return
         con.execute("DELETE FROM songs WHERE id=?", (song_id,))
         con.execute("DELETE FROM feedback WHERE song_id=?", (song_id,))
+        con.execute("DELETE FROM playlist_songs WHERE song_id=?", (song_id,))
+        con.execute("DELETE FROM listening_events WHERE song_id=?", (song_id,))
         con.execute("DELETE FROM similarity_feedback WHERE song_a=? OR song_b=?", (song_id, song_id))
         (AUDIO / (song_id + row["extension"])).unlink(missing_ok=True)
 
@@ -117,3 +128,61 @@ def update_song_metadata(song_id, title, artist):
             raise ValueError("Song no longer exists.")
         con.execute("UPDATE songs SET title=?, artist=? WHERE id=?",
                     (title, artist, song_id))
+
+def create_playlist(name):
+    name = name.strip()
+    if not name or len(name) > 100:
+        raise ValueError("Playlist name must contain 1–100 characters.")
+    with connect() as con:
+        con.execute("INSERT INTO playlists(name) VALUES (?)", (name,))
+
+
+def list_playlists():
+    with connect() as con:
+        return [dict(row) for row in con.execute("SELECT * FROM playlists ORDER BY name COLLATE NOCASE")]
+
+
+def playlist_song_ids(playlist_id):
+    with connect() as con:
+        return [row["song_id"] for row in con.execute(
+            "SELECT song_id FROM playlist_songs WHERE playlist_id=? ORDER BY added_at, rowid",
+            (playlist_id,))]
+
+
+def add_to_playlist(playlist_id, song_id):
+    with connect() as con:
+        if not con.execute("SELECT 1 FROM playlists WHERE id=?", (playlist_id,)).fetchone():
+            raise ValueError("Playlist does not exist.")
+        if not con.execute("SELECT 1 FROM songs WHERE id=?", (song_id,)).fetchone():
+            raise ValueError("Song does not exist.")
+        con.execute("INSERT OR IGNORE INTO playlist_songs(playlist_id,song_id) VALUES (?,?)",
+                    (playlist_id, song_id))
+
+
+def remove_from_playlist(playlist_id, song_id):
+    with connect() as con:
+        con.execute("DELETE FROM playlist_songs WHERE playlist_id=? AND song_id=?",
+                    (playlist_id, song_id))
+
+
+def delete_playlist(playlist_id):
+    with connect() as con:
+        con.execute("DELETE FROM playlist_songs WHERE playlist_id=?", (playlist_id,))
+        con.execute("DELETE FROM playlists WHERE id=?", (playlist_id,))
+
+
+def record_play(song_id):
+    """Explicit playback confirmation; st.audio alone offers no play-event callback."""
+    with connect() as con:
+        if not con.execute("SELECT 1 FROM songs WHERE id=?", (song_id,)).fetchone():
+            raise ValueError("Song does not exist.")
+        con.execute("INSERT INTO listening_events(song_id) VALUES (?)", (song_id,))
+
+
+def listening_stats():
+    with connect() as con:
+        counts = {row["song_id"]: row["plays"] for row in con.execute(
+            "SELECT song_id, COUNT(*) AS plays FROM listening_events GROUP BY song_id")}
+        recent = [dict(row) for row in con.execute(
+            "SELECT song_id, played_at FROM listening_events ORDER BY id DESC LIMIT 30")]
+        return counts, recent
