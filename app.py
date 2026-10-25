@@ -281,14 +281,26 @@ with tab5:
                 "or add it to Streamlit secrets. Get a free API key at "
                 "https://www.last.fm/api/account/create.")
     liked_songs = [song for song in library if get_feedback().get(song["id"]) == 1]
-    source_choices = ["Selected song"] + (["One of my liked songs"] if liked_songs else [])
-    discovery_source = st.radio("Discover based on", source_choices,
-                                horizontal=True, key="discovery_source")
+    discovery_source = st.radio(
+        "Discover based on",
+        ["Currently selected song", "Any song in my library", "Liked songs only"],
+        horizontal=True,
+        key="discovery_source",
+    )
     source_song = selection
-    if discovery_source == "One of my liked songs":
-        source_song = st.selectbox("Choose a favorite", liked_songs,
-                                   format_func=lambda x: x["title"],
-                                   key="discovery_favorite")
+    if discovery_source == "Any song in my library":
+        st.caption(f"Showing all {len(library)} saved songs.")
+        source_song = st.selectbox(
+            "Choose a song", library, format_func=lambda x: x["title"],
+            key="discovery_any_song")
+    elif discovery_source == "Liked songs only":
+        if liked_songs:
+            st.caption(f"Showing {len(liked_songs)} liked songs out of {len(library)} total.")
+            source_song = st.selectbox(
+                "Choose a liked song", liked_songs,
+                format_func=lambda x: x["title"], key="discovery_favorite")
+        else:
+            st.info("You haven't liked any songs yet. Switch to All songs to browse your library.")
     filename = Path(source_song["title"]).stem
     # Artist and title order differs across music libraries: both remain editable.
     guess_parts = filename.split(" - ", 1)
