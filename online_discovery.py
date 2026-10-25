@@ -112,7 +112,7 @@ def verified_spotify_match(artist, track, client):
 
     def normalize(value):
         value = unicodedata.normalize("NFKC", value or "").casefold()
-        return " ".join(re.findall(r"[^\\W_]+", value, flags=re.UNICODE))
+        return " ".join(re.findall(r"[^\W_]+", value, flags=re.UNICODE))
 
     response = client.search(q=f'track:"{track}" artist:"{artist}"',
                              type="track", limit=10)
