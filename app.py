@@ -8,8 +8,9 @@ import pandas as pd
 import streamlit as st
 
 from analyzer import analyze_audio
-from library import add_song, delete_song, get_feedback, set_feedback, songs, get_similarity_feedback, rate_similarity
+from library import add_song, delete_song, get_feedback, set_feedback, songs, get_similarity_feedback, rate_similarity, saved_discoveries, set_discovery_status
 from recommender import recommendations
+from explore import parse_title, cover_for, taste_summary, music_map, mood_search, closest_section
 from visualizations import overview
 
 st.set_page_config(page_title="Music Recommender", page_icon="🎵", layout="wide")
@@ -67,7 +68,7 @@ sid = selection["id"]
 features = selection["features"]
 st.audio(str(selection["path"]))
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["Analysis", "Recommendations", "Library & Preferences", "Evaluation", "Online Discovery"])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["Analysis", "Recommendations", "Library & Preferences", "Evaluation", "Online Discovery", "Taste & Map", "Song Sections"])
 with tab1:
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Estimated tempo", f"{features['tempo']:.0f} BPM")
@@ -196,15 +197,26 @@ with tab2:
 with tab3:
     st.subheader("Saved music library")
     feedback = get_feedback()
+    sort_mode = st.selectbox("Sort by", ["Title", "Favorites first", "Tempo (highest first)"])
     search_text = st.text_input("Search your songs", placeholder="Type a title...", key="library_search")
     matching = [song for song in library
                 if search_text.casefold().strip() in song["title"].casefold()]
+    if sort_mode == "Favorites first":
+        matching.sort(key=lambda song: feedback.get(song["id"], 0), reverse=True)
+    elif sort_mode == "Tempo (highest first)":
+        matching.sort(key=lambda song: song["features"].get("tempo", 0), reverse=True)
     st.caption(f"Showing {len(matching)} of {len(library)} songs. Rate songs directly below.")
     for song in matching:
         current_rating = feedback.get(song["id"], 0)
         with st.container(border=True):
             title_col, like_col, dislike_col, clear_col = st.columns([5, 1.4, 1.4, 1.4], vertical_alignment="center")
-            title_col.markdown(f"**{song['title']}**")
+            artist, title = parse_title(song["title"])
+            title_col.markdown(f"**{title}**")
+            if artist:
+                title_col.caption(artist)
+            cover = cover_for(song)
+            if cover:
+                title_col.image(cover, width=90)
             title_col.caption({1: "👍 Liked", -1: "👎 Disliked", 0: "Not rated"}[current_rating])
             for col, label, value in (
                 (like_col, "👍 Like", 1),
