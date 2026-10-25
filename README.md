@@ -10,7 +10,9 @@ A Python app that analyzes audio and recommends music using acoustic features, l
 - Try hybrid recommendations combining three CLAP audio segments with acoustic features.
 - Rate how similar two songs sound (1–5), separately from Like/Dislike.
 - Discover similar or mood-based songs, save discoveries, and export playlists.
-- Explore your taste dashboard and interactive music universe.\n- Create custom playlists, track listening sessions, and screen for duplicate recordings.\n- Search your local songs by natural-language description, try Surprise Me, and inspect recommendation explanations.
+- Explore your taste dashboard and interactive music universe.
+- Create custom playlists, track listening sessions, and screen for duplicate recordings.
+- Search your local songs by natural-language description, try Surprise Me, and inspect recommendation explanations.
 
 ## Getting started
 
