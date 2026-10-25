@@ -8,8 +8,9 @@ import pandas as pd
 import streamlit as st
 
 from analyzer import analyze_audio
-from library import add_song, delete_song, get_feedback, set_feedback, songs, get_similarity_feedback, rate_similarity, saved_discoveries, set_discovery_status, update_song_metadata
+from library import add_song, delete_song, get_feedback, set_feedback, songs, get_similarity_feedback, rate_similarity, saved_discoveries, set_discovery_status, update_song_metadata, create_playlist, list_playlists, playlist_song_ids, add_to_playlist, remove_from_playlist, delete_playlist, record_play, listening_stats
 from recommender import recommendations
+from smart_features import explain_match, surprise_me, duplicate_candidates, text_recommendations
 from explore import parse_title, cover_for, taste_summary, music_map, mood_search, closest_section
 from visualizations import overview
 
@@ -76,7 +77,7 @@ sid = selection["id"]
 features = selection["features"]
 st.audio(str(selection["path"]))
 
-tab1, tab2, tab3, tab5, tab6, tab7 = st.tabs(["🎼 Analysis", "✨ Recommendations", "💜 Library & Preferences", "🌍 Online Discovery", "🪐 Taste & Map", "🎧 Song Sections"])
+tab1, tab2, tab3, tab5, tab6, tab8, tab9 = st.tabs(["🎼 Analysis", "✨ Recommendations", "💜 Library & Preferences", "🌍 Online Discovery", "🪐 Taste & Map", "📁 Playlists", "📊 Listening & Tools"])
 with tab1:
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Estimated tempo", f"{features['tempo']:.0f} BPM")
@@ -150,6 +151,7 @@ with tab2:
                       else f"preference score {rec['rank_score']:.3f}")
             st.markdown(f"**{rec['title']}** · {rec['tempo']:.0f} BPM · {metric}")
             st.audio(str(item["path"]))
+            st.caption("Why this recommendation? " + " · ".join(explain_match(selection, item)))
             current = feedback.get(rec["id"], 0)
             st.caption("Current rating: " +
                        {1: "Liked", -1: "Disliked", 0: "Neutral"}[current])
@@ -192,6 +194,7 @@ with tab2:
                             f"· rank score {rec['rank_score']:.3f}")
                 matched_song = next(s for s in library if s["id"] == rec["id"])
                 st.audio(str(matched_song["path"]))
+                st.caption("Feature comparison (not an explanation of CLAP attention): " + " · ".join(explain_match(selection, matched_song)))
                 pair = tuple(sorted((sid, rec["id"])))
                 prior = get_similarity_feedback().get(pair, 3)
                 with st.form(key="similarity_" + sid + "_" + rec["id"]):
@@ -200,6 +203,37 @@ with tab2:
                     if st.form_submit_button("Save similarity rating"):
                         rate_similarity(sid, rec["id"], int(judgment))
                         st.rerun()
+
+
+        st.divider()
+        st.subheader("🔎 Describe the music you want")
+        st.caption("Search your own uploaded recordings using CLAP audio/text matching. It does not search Spotify.")
+        description = st.text_input("Music description", placeholder="gentle, nostalgic instrumental piano with no vocals")
+        if st.button("Search songs by description"):
+            if not description.strip():
+                st.warning("Enter a description first.")
+            else:
+                try:
+                    with st.spinner("Comparing your description with local audio..."):
+                        st.session_state["text_matches"] = text_recommendations(library, description.strip())
+                    st.session_state["text_prompt"] = description.strip()
+                except ImportError:
+                    st.error("Install CLAP: python -m pip install -r requirements-ai.txt")
+                except Exception as exc:
+                    st.error("Text search failed: " + str(exc))
+        if st.session_state.get("text_prompt") == description.strip():
+            for song, similarity in st.session_state.get("text_matches", []):
+                st.write(song_label(song) + " · CLAP text/audio cosine: " + format(similarity, ".3f"))
+                st.audio(str(song["path"]))
+        st.divider()
+        st.subheader("🎲 Surprise Me")
+        novelty = st.slider("Adventure level", 0.0, 1.0, 0.5, 0.1,
+                            help="Higher values favor more distant-sounding songs.")
+        if st.button("Surprise me!"):
+            st.session_state["surprise_results"] = surprise_me(library, sid, get_feedback(), novelty)
+        for song in st.session_state.get("surprise_results", []):
+            st.write(song_label(song))
+            st.audio(str(song["path"]))
 
 
 with tab3:
@@ -458,21 +492,3 @@ with tab6:
                     st.caption("Nearby songs: " + " · ".join(nearest))
         else:
             st.info("Add more songs or rebuild the map after changing your library.")
-
-with tab7:
-    st.subheader("Song-section matching")
-    st.caption("Compare beginning, middle and end sections with CLAP embeddings.")
-    others = [item for item in library if item["id"] != sid]
-    if others:
-        other = st.selectbox("Compare selected song with", others,
-                             format_func=song_label)
-        if st.button("Find closest passages"):
-            try:
-                with st.spinner("Comparing sections..."):
-                    first, second, score = closest_section(selection, other)
-                st.success("Best match: section " + str(first+1) +
-                           " of the selected song and section " + str(second+1) +
-                           " of the comparison song; cosine " + format(score, ".3f"))
-                st.audio(str(other["path"]))
-            except Exception as exc:
-                st.error(str(exc))
