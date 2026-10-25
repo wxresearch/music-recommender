@@ -90,9 +90,9 @@ with tab1:
     with st.spinner("Generating visualizations"):
         waveform, spectrum, freq, times = visualization_cached(
             str(selection["path"]), selection["path"].stat().st_mtime_ns)
-    st.subheader("Waveform (first 45 seconds)")
+    st.subheader("Waveform (First 45 Seconds)")
     st.line_chart(waveform, x="Seconds", y="Amplitude")
-    st.subheader("Spectrogram (first 45 seconds)")
+    st.subheader("Spectrogram (First 45 Seconds)")
     fig, ax = plt.subplots(figsize=(10, 3))
     ax.imshow(spectrum, origin="lower", aspect="auto",
               extent=[float(times[0]), float(times[-1]),
@@ -172,7 +172,7 @@ with tab2:
                     st.rerun()
         st.caption("Ratings save immediately and rerank the results.")
         st.divider()
-        st.subheader("AI audio embeddings (experimental)")
+        st.subheader("AI Audio Embeddings (Experimental)")
         st.caption("Try a pretrained CLAP model to find similar-sounding music. "
                    "First run downloads the model and analyzes each saved track. "
                    "This is optional, separate from the default feature-based recommender.")
@@ -213,7 +213,7 @@ with tab2:
 
 
         st.divider()
-        st.subheader("🔎 Describe the music you want")
+        st.subheader("🔎 Describe the Music You Want")
         st.caption("Search your own uploaded recordings using CLAP audio/text matching. It does not search Spotify.")
         description = st.text_input("Music description", placeholder="gentle, nostalgic instrumental piano with no vocals")
         if st.button("Search songs by description"):
@@ -244,7 +244,7 @@ with tab2:
 
 
 with tab3:
-    st.subheader("Saved music library")
+    st.subheader("Saved Music Library")
     feedback = get_feedback()
     sort_mode = st.selectbox("Sort by", ["Title", "Favorites first", "Tempo (highest first)"])
     search_text = st.text_input("Search your songs", placeholder="Type a title...", key="library_search")
@@ -294,7 +294,7 @@ with tab3:
         st.rerun()
 
 with tab5:
-    st.subheader("Discover songs online")
+    st.subheader("Discover Songs Online")
     st.caption("Find similar tracks using Last.fm listening data, then open a "
                "Spotify search to listen. These results are not CLAP audio comparisons.")
     import os
@@ -355,7 +355,7 @@ with tab5:
                 st.session_state["discovery_query"] = (artist_name, track_name)
             except Exception as exc:
                 st.error(f"Online discovery failed: {exc}")
-    st.subheader("Mood discovery")
+    st.subheader("Mood Discovery")
     mood = st.selectbox("Mood", ["Dreamy piano", "Melancholic", "Energetic electronic", "Peaceful ambient", "Lo-fi", "Instrumental"])
     if st.button("Find songs by mood"):
         if not api_key:
@@ -393,7 +393,7 @@ with tab5:
                 st.markdown(f"[See on Last.fm]({rec['lastfm_url']})")
 
     st.divider()
-    st.subheader("Saved discoveries")
+    st.subheader("Saved Discoveries")
     saved_items = [v for v in saved_discoveries().values() if v["status"] == "Saved"]
     if saved_items:
         st.dataframe(pd.DataFrame(saved_items)[["artist", "track"]], hide_index=True)
@@ -431,7 +431,7 @@ with tab6:
         st.caption("Averages by rating, in each feature's original units.")
     st.divider()
     st.subheader("🏷️ AI Genre and Mood Tags")
-    st.caption("CLAP estimates the closest matching labels. These are predictions, not verified genres.")
+    st.caption("CLAP predicts a genre and up to three closely matching moods for each song. These are relative audio-text similarities, not verified classifications.")
     if st.button("Analyze genre & mood", key="run_tags"):
         try:
             with st.spinner("Classifying local audio with CLAP..."):
@@ -443,7 +443,7 @@ with tab6:
     known_tags = get_ai_tags()
     if known_tags:
         rows = [{"Song": song_label(song), "Genre": known_tags[song["id"]]["genre"],
-                 "Mood": known_tags[song["id"]]["mood"]}
+                 "Moods": " · ".join(m.title() for m in known_tags[song["id"]].get("moods", [known_tags[song["id"]]["mood"]]))}
                 for song in library if song["id"] in known_tags]
         st.dataframe(pd.DataFrame(rows), hide_index=True)
     st.divider()
@@ -522,7 +522,7 @@ with tab6:
             st.info("Add more songs or rebuild the map after changing your library.")
 
 with tab8:
-    st.subheader("📁 Your playlists")
+    st.subheader("📁 Your Playlists")
     st.caption("Create playlists from songs already saved on this computer.")
     with st.form("new_playlist"):
         playlist_name = st.text_input("New playlist name", placeholder="Late night studying")
@@ -562,7 +562,7 @@ with tab8:
 
 
     st.divider()
-    st.subheader("✨ Generate a playlist with AI")
+    st.subheader("✨ Generate a Playlist with AI")
     st.caption("Describe a vibe. CLAP finds local tracks and balances matching your prompt with variety.")
     with st.form("generate_playlist_form"):
         prompt = st.text_input("Describe your playlist", placeholder="Relaxing atmospheric music for late-night studying")
@@ -602,7 +602,7 @@ with tab8:
             except Exception as exc:
                 st.error("Could not save playlist: " + str(exc))
     st.divider()
-    st.subheader("💾 Backup and restore")
+    st.subheader("💾 Backup and Restore")
     st.caption("Download your local songs, ratings, playlists and discoveries as a ZIP. No API secrets are included.")
     if st.button("Prepare backup"):
         try:
