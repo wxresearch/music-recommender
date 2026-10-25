@@ -16,6 +16,8 @@ def connect():
         id TEXT PRIMARY KEY, title TEXT NOT NULL, extension TEXT NOT NULL,
         features TEXT NOT NULL
     )""")
+    if "artist" not in {row["name"] for row in con.execute("PRAGMA table_info(songs)")}:
+        con.execute("ALTER TABLE songs ADD COLUMN artist TEXT NOT NULL DEFAULT ''")
     con.execute("""CREATE TABLE IF NOT EXISTS feedback (
         song_id TEXT PRIMARY KEY, preference INTEGER NOT NULL DEFAULT 0
     )""")
@@ -33,14 +35,14 @@ def add_song(song_id, title, extension, content, features):
             return False
         # Files are local; do not store authentication data or upload audio to GitHub.
         (AUDIO / (song_id + extension)).write_bytes(content)
-        con.execute("INSERT INTO songs VALUES (?,?,?,?)",
+        con.execute("INSERT INTO songs (id,title,extension,features) VALUES (?,?,?,?)",
                     (song_id, title, extension, json.dumps(features)))
     return True
 
 
 def songs():
     with connect() as con:
-        return [{"id": r["id"], "title": r["title"],
+        return [{"id": r["id"], "title": r["title"], "artist": r["artist"],
                  "path": AUDIO / (r["id"] + r["extension"]),
                  "features": json.loads(r["features"])}
                 for r in con.execute("SELECT * FROM songs ORDER BY title")]
@@ -95,3 +97,15 @@ def set_discovery_status(artist, track, status, url=""):
     with connect() as con:
         con.execute("INSERT INTO discoveries VALUES (?,?,?,?) ON CONFLICT(artist,track) DO UPDATE SET status=excluded.status, url=excluded.url",
                     (artist, track, status, url))
+
+
+def update_song_metadata(song_id, title, artist):
+    """Change display metadata only; never rename stored audio or alter ratings."""
+    title, artist = title.strip(), artist.strip()
+    if not title or len(title) > 250 or len(artist) > 250:
+        raise ValueError("Enter a song title (max 250 characters) and an artist (max 250 characters).")
+    with connect() as con:
+        if not con.execute("SELECT 1 FROM songs WHERE id=?", (song_id,)).fetchone():
+            raise ValueError("Song no longer exists.")
+        con.execute("UPDATE songs SET title=?, artist=? WHERE id=?",
+                    (title, artist, song_id))
