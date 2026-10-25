@@ -15,7 +15,7 @@ from sklearn.decomposition import PCA
 def parse_title(filename):
     stem = Path(filename).stem
     if " - " in stem:
-        artist, title = stem.split(" - ", 1)
+        title, artist = stem.split(" - ", 1)
         return artist.strip(), title.strip()
     return "", stem
 
