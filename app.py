@@ -406,19 +406,35 @@ with tab6:
             data["Sound group"] = ["Cluster " + str(v+1) for v in labels]
             ratings = get_feedback()
             data["Preference"] = [{1:"Liked", -1:"Disliked", 0:"Unrated"}.get(ratings.get(k,0)) for k in data["id"]]
-            fig = px.scatter(data, x="x", y="y", color="Sound group", symbol="Preference",
-                             hover_name="title", custom_data=["id"],
-                             color_discrete_sequence=px.colors.qualitative.Pastel,
-                             template="plotly_dark")
-            fig.update_traces(marker=dict(size=15, line=dict(width=1, color="white")))
-            fig.update_layout(height=560, margin=dict(l=8,r=8,t=10,b=8),
-                              paper_bgcolor="#181a2b", plot_bgcolor="#181a2b",
-                              legend_title_text="Similar sound groups")
-            fig.update_xaxes(visible=False)
-            fig.update_yaxes(visible=False, scaleanchor="x", scaleratio=1)
-            event = st.plotly_chart(fig, use_container_width=True, on_select="rerun",
-                                    selection_mode="points", key="music_universe")
-            st.caption("Colored clusters are generated automatically, not identified genres. Click any dot to listen.")
+            fig = px.scatter(
+                data, x="x", y="y", color="Sound group",
+                hover_name="title", custom_data=["id"],
+                hover_data={"Preference": True, "x": False, "y": False, "Sound group": False},
+                color_discrete_sequence=["#78CDE8", "#B7A5E8", "#EAAE83", "#8ED5B0"],
+                template="plotly_dark")
+            fig.update_traces(marker=dict(size=15, opacity=0.9,
+                                          line=dict(width=1.3, color="#E9ECF5")))
+            fig.update_layout(
+                height=550, margin=dict(l=18, r=18, t=22, b=18),
+                paper_bgcolor="#171A29", plot_bgcolor="#171A29",
+                font=dict(color="#ECEFFA"),
+                hoverlabel=dict(bgcolor="#252A40", font_size=13),
+                legend=dict(
+                    title=dict(text="Sound groups", font=dict(size=12, color="#E6E8F0")),
+                    x=0.985, y=0.025, xanchor="right", yanchor="bottom",
+                    bgcolor="rgba(30,34,52,0.94)",
+                    bordercolor="rgba(225,230,245,0.25)", borderwidth=1,
+                    font=dict(color="#F1F3FA", size=12),
+                    orientation="v", itemsizing="constant"))
+            fig.update_xaxes(visible=False, showgrid=False, zeroline=False)
+            fig.update_yaxes(visible=False, showgrid=False, zeroline=False,
+                             scaleanchor="x", scaleratio=1)
+            event = st.plotly_chart(
+                fig, use_container_width=True, on_select="rerun",
+                selection_mode="points", key="music_universe",
+                config={"displaylogo": False,
+                        "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"]})
+            st.caption("Colors indicate automatically grouped sounds, not genres. Hover for song names and ratings; click a dot to listen.")
             if event.selection.points:
                 chosen_id = event.selection.points[0]["customdata"][0]
                 matched = next((item for item in library if item["id"] == chosen_id), None)
