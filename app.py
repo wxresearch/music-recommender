@@ -319,44 +319,8 @@ with tab5:
         found = st.session_state.get("discovery_results", [])
         if not found:
             st.info("No matches even after checking tags and related artists. Try another track or verify the artist and title.")
-        st.caption("Spotify search links are not verified tracks. You can check exact matches using your Spotify developer app.")
-        spotify_filter = st.radio(
-            "Spotify availability",
-            ["All discoveries", "Verified on Spotify", "Not verified"],
-            horizontal=True, key="spotify_filter")
-        with st.expander("How to get Spotify developer credentials"):
-            st.markdown("Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), create an app, then open its Settings. Copy the Client ID and click View client secret. Keep your secret private. These fields are optional.")
-        verification_id = st.text_input(
-            "Spotify Client ID (optional verification)",
-            value=os.getenv("SPOTIPY_CLIENT_ID", ""), key="verify_spotify_id")
-        verification_secret = st.text_input(
-            "Spotify Client Secret (optional verification)", type="password",
-            value=os.getenv("SPOTIPY_CLIENT_SECRET", ""), key="verify_spotify_secret")
-        if st.button("Verify tracks on Spotify"):
-            if not verification_id or not verification_secret:
-                st.warning("Provide Spotify developer credentials to check the catalog.")
-            else:
-                try:
-                    from online_discovery import verify_spotify_tracks
-                    with st.spinner("Checking Spotify's catalog for exact artist/title matches..."):
-                        verified = verify_spotify_tracks(found, verification_id, verification_secret)
-                    st.session_state["spotify_matches"] = verified
-                    st.session_state["spotify_verified_query"] = st.session_state.get("discovery_query")
-                except Exception as exc:
-                    st.error("Spotify verification failed: " + str(exc))
-        matches = (st.session_state.get("spotify_matches", {})
-                   if st.session_state.get("spotify_verified_query") == st.session_state.get("discovery_query")
-                   else {})
         statuses = saved_discoveries()
         found = [rec for rec in found if statuses.get((rec["artist"].casefold(), rec["track"].casefold()), {}).get("status") not in ("Not interested", "Already heard")]
-        if spotify_filter != "All discoveries":
-            if not matches:
-                st.info("Click Verify tracks on Spotify to use the availability filter.")
-                found = []
-            elif spotify_filter == "Verified on Spotify":
-                found = [rec for rec in found if matches.get((rec["artist"].casefold(), rec["track"].casefold()))]
-            else:
-                found = [rec for rec in found if not matches.get((rec["artist"].casefold(), rec["track"].casefold()))]
         from online_discovery import youtube_music_search_url
         for i, rec in enumerate(found, 1):
             st.markdown(f"**{i}. {rec['track']} — {rec['artist']}**")
@@ -364,10 +328,9 @@ with tab5:
                 st.caption(f"Last.fm similarity: {rec['lastfm_match']:.3f} · {rec['source']} (not CLAP)")
             else:
                 st.caption(f"Discovered through {rec['source']} · not a CLAP-scored match")
-            exact = matches.get((rec["artist"].casefold(), rec["track"].casefold()))
             listen = st.columns(2)
             with listen[0]:
-                st.link_button("🎵 Spotify", exact or rec["spotify_url"], use_container_width=True)
+                st.link_button("🎵 Spotify", rec["spotify_url"], use_container_width=True)
             with listen[1]:
                 st.link_button("▶ YouTube Music", youtube_music_search_url(rec["artist"], rec["track"]), use_container_width=True)
             actions = st.columns(3)
