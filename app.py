@@ -67,7 +67,7 @@ sid = selection["id"]
 features = selection["features"]
 st.audio(str(selection["path"]))
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["Analysis", "Recommendations", "Library & preferences", "Evaluation", "Online Discovery"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Analysis", "Recommendations", "Library & Preferences", "Evaluation", "Online Discovery"])
 with tab1:
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Estimated tempo", f"{features['tempo']:.0f} BPM")
