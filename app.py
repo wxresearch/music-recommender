@@ -372,3 +372,86 @@ with tab5:
                     st.rerun()
             if rec["lastfm_url"].startswith("https://"):
                 st.markdown(f"[See on Last.fm]({rec['lastfm_url']})")
+
+    st.divider()
+    st.subheader("Saved discoveries")
+    saved_items = [v for v in saved_discoveries().values() if v["status"] == "Saved"]
+    if saved_items:
+        st.dataframe(pd.DataFrame(saved_items)[["artist", "track"]], hide_index=True)
+        with st.expander("Export to Spotify playlist"):
+            st.caption("Requires Spotify developer app credentials and account authorization.")
+            cid = st.text_input("Spotify Client ID", value=os.getenv("SPOTIPY_CLIENT_ID", ""))
+            secret = st.text_input("Spotify Client Secret", type="password")
+            redirect = st.text_input("Spotify redirect URI", value="http://127.0.0.1:8888/callback")
+            playlist_name = st.text_input("Playlist title", value="Music Recommender Discoveries")
+            if st.button("Create private Spotify playlist"):
+                if not cid or not secret:
+                    st.warning("Enter your Spotify app credentials.")
+                else:
+                    try:
+                        from explore import spotify_export
+                        playlist_url, missing = spotify_export(
+                            [(x["artist"], x["track"]) for x in saved_items],
+                            cid, secret, redirect, playlist_name)
+                        if playlist_url:
+                            st.link_button("Open playlist", playlist_url)
+                        if missing:
+                            st.warning(str(len(missing)) + " tracks were not found on Spotify.")
+                    except Exception as exc:
+                        st.error("Spotify export failed: " + str(exc))
+    else:
+        st.info("Save an online discovery to collect songs for your playlist.")
+
+with tab6:
+    st.subheader("Musical taste profile")
+    profile = taste_summary(library, get_feedback())
+    if profile.empty:
+        st.info("Rate some songs to see how their audio features differ.")
+    else:
+        st.dataframe(profile.round(3))
+        st.caption("Averages by rating, in each feature's original units.")
+    st.subheader("Interactive music map")
+    use_clap = st.checkbox("Use CLAP embeddings", value=False)
+    if st.button("Build music map"):
+        try:
+            vectors = None
+            if use_clap:
+                from ai_embeddings import embedding_for
+                with st.spinner("Preparing embeddings..."):
+                    vectors = {item["id"]: embedding_for(item) for item in library}
+            st.session_state["map_points"] = music_map(library, vectors)
+        except Exception as exc:
+            st.error(str(exc))
+    if "map_points" in st.session_state:
+        data = st.session_state["map_points"]
+        if len(data) >= 3 and set(data["id"]) == {item["id"] for item in library}:
+            import plotly.express as px
+            chart = px.scatter(data, x="x", y="y", hover_name="title", custom_data=["id"])
+            event = st.plotly_chart(chart, use_container_width=True,
+                                    on_select="rerun", selection_mode="points")
+            if event.selection.points:
+                song_id = event.selection.points[0]["customdata"][0]
+                matched = next((item for item in library if item["id"] == song_id), None)
+                if matched:
+                    st.write(matched["title"])
+                    st.audio(str(matched["path"]))
+        else:
+            st.info("Add at least three songs or rebuild the map after changing your library.")
+
+with tab7:
+    st.subheader("Song-section matching")
+    st.caption("Compare beginning, middle and end sections with CLAP embeddings.")
+    others = [item for item in library if item["id"] != sid]
+    if others:
+        other = st.selectbox("Compare selected song with", others,
+                             format_func=lambda item: item["title"])
+        if st.button("Find closest passages"):
+            try:
+                with st.spinner("Comparing sections..."):
+                    first, second, score = closest_section(selection, other)
+                st.success("Best match: section " + str(first+1) +
+                           " of the selected song and section " + str(second+1) +
+                           " of the comparison song; cosine " + format(score, ".3f"))
+                st.audio(str(other["path"]))
+            except Exception as exc:
+                st.error(str(exc))
