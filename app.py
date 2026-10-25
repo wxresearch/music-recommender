@@ -410,6 +410,7 @@ with tab6:
                 data, x="x", y="y", color="Sound group",
                 hover_name="title", custom_data=["id"],
                 hover_data={"Preference": True, "x": False, "y": False, "Sound group": False},
+                category_orders={"Sound group": [f"Cluster {i+1}" for i in range(group_count)]},
                 color_discrete_sequence=["#78CDE8", "#B7A5E8", "#EAAE83", "#8ED5B0"],
                 template="plotly_dark")
             fig.update_traces(marker=dict(size=15, opacity=0.9,
