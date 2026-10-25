@@ -422,7 +422,7 @@ with tab5:
         st.info("Save an online discovery to collect songs for your playlist.")
 
 with tab6:
-    st.subheader("Musical taste profile")
+    st.subheader("Musical Taste Profile")
     profile = taste_summary(library, get_feedback())
     if profile.empty:
         st.info("Rate some songs to see how their audio features differ.")
