@@ -14,6 +14,12 @@ from explore import parse_title, cover_for, taste_summary, music_map, mood_searc
 from visualizations import overview
 
 st.set_page_config(page_title="Music Recommender", page_icon="🎵", layout="wide")
+st.markdown("""<style>
+.block-container {padding-top: 1.7rem; max-width: 1260px;}
+h1,h2,h3 {letter-spacing: -.02em;}
+div.stButton>button, div.stLinkButton>a {border-radius: 12px;}
+div[data-testid="stMetric"] {padding: 12px; border-radius: 14px; background:rgba(122,100,195,.08);}
+</style>""", unsafe_allow_html=True)
 st.title("🎧 Music Recommender")
 st.caption("Local song analysis, persistent library, and personalized recommendations.")
 
@@ -409,33 +415,59 @@ with tab6:
     else:
         st.dataframe(profile.round(3))
         st.caption("Averages by rating, in each feature's original units.")
-    st.subheader("Interactive music map")
-    use_clap = st.checkbox("Use CLAP embeddings", value=False)
-    if st.button("Build music map"):
+    st.divider()
+    st.subheader("🪐 Music Universe")
+    st.caption("Each dot represents a song. Nearby dots tend to sound alike. The two hidden axes are just mathematical coordinates, not musical properties or genres.")
+    use_clap = st.checkbox("Use CLAP audio embeddings", value=True)
+    if st.button("✨ Build my music universe"):
         try:
             vectors = None
             if use_clap:
                 from ai_embeddings import embedding_for
-                with st.spinner("Preparing embeddings..."):
+                with st.spinner("Mapping songs by sound..."):
                     vectors = {item["id"]: embedding_for(item) for item in library}
             st.session_state["map_points"] = music_map(library, vectors)
         except Exception as exc:
-            st.error(str(exc))
+            st.error("Map failed: " + str(exc))
     if "map_points" in st.session_state:
-        data = st.session_state["map_points"]
+        data = st.session_state["map_points"].copy()
         if len(data) >= 3 and set(data["id"]) == {item["id"] for item in library}:
             import plotly.express as px
-            chart = px.scatter(data, x="x", y="y", hover_name="title", custom_data=["id"])
-            event = st.plotly_chart(chart, use_container_width=True,
-                                    on_select="rerun", selection_mode="points")
+            from sklearn.cluster import KMeans
+            from sklearn.preprocessing import StandardScaler
+            import numpy as np
+            coords = data[["x", "y"]].to_numpy()
+            group_count = min(4, max(2, len(data)//8))
+            labels = KMeans(n_clusters=group_count, n_init=10, random_state=5).fit_predict(
+                StandardScaler().fit_transform(coords))
+            data["Sound group"] = ["Cluster " + str(v+1) for v in labels]
+            ratings = get_feedback()
+            data["Preference"] = [{1:"Liked", -1:"Disliked", 0:"Unrated"}.get(ratings.get(k,0)) for k in data["id"]]
+            fig = px.scatter(data, x="x", y="y", color="Sound group", symbol="Preference",
+                             hover_name="title", custom_data=["id"],
+                             color_discrete_sequence=px.colors.qualitative.Pastel,
+                             template="plotly_dark")
+            fig.update_traces(marker=dict(size=15, line=dict(width=1, color="white")))
+            fig.update_layout(height=560, margin=dict(l=8,r=8,t=10,b=8),
+                              paper_bgcolor="#181a2b", plot_bgcolor="#181a2b",
+                              legend_title_text="Similar sound groups")
+            fig.update_xaxes(visible=False)
+            fig.update_yaxes(visible=False, scaleanchor="x", scaleratio=1)
+            event = st.plotly_chart(fig, use_container_width=True, on_select="rerun",
+                                    selection_mode="points", key="music_universe")
+            st.caption("Colored clusters are generated automatically, not identified genres. Click any dot to listen.")
             if event.selection.points:
-                song_id = event.selection.points[0]["customdata"][0]
-                matched = next((item for item in library if item["id"] == song_id), None)
+                chosen_id = event.selection.points[0]["customdata"][0]
+                matched = next((item for item in library if item["id"] == chosen_id), None)
                 if matched:
-                    st.write(matched["title"])
+                    st.markdown("**" + matched["title"] + "**")
                     st.audio(str(matched["path"]))
+                    idx = data.index[data["id"] == chosen_id][0]
+                    ds = np.linalg.norm(coords - coords[idx], axis=1)
+                    nearest = [data.iloc[i]["title"] for i in np.argsort(ds) if i != idx][:3]
+                    st.caption("Nearby songs: " + " · ".join(nearest))
         else:
-            st.info("Add at least three songs or rebuild the map after changing your library.")
+            st.info("Add more songs or rebuild the map after changing your library.")
 
 with tab7:
     st.subheader("Song-section matching")
