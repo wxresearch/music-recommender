@@ -35,6 +35,7 @@ def connect():
         playlist_id INTEGER NOT NULL, song_id TEXT NOT NULL,
         added_at TEXT DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY(playlist_id,song_id))""")
+    con.execute("""CREATE TABLE IF NOT EXISTS ai_tags (song_id TEXT PRIMARY KEY, genre TEXT NOT NULL, mood TEXT NOT NULL)""")
     con.execute("""CREATE TABLE IF NOT EXISTS listening_events (
         id INTEGER PRIMARY KEY AUTOINCREMENT, song_id TEXT NOT NULL,
         played_at TEXT DEFAULT CURRENT_TIMESTAMP)""")
@@ -87,6 +88,7 @@ def delete_song(song_id):
         con.execute("DELETE FROM songs WHERE id=?", (song_id,))
         con.execute("DELETE FROM feedback WHERE song_id=?", (song_id,))
         con.execute("DELETE FROM playlist_songs WHERE song_id=?", (song_id,))
+        con.execute("DELETE FROM ai_tags WHERE song_id=?", (song_id,))
         con.execute("DELETE FROM listening_events WHERE song_id=?", (song_id,))
         con.execute("DELETE FROM similarity_feedback WHERE song_a=? OR song_b=?", (song_id, song_id))
         (AUDIO / (song_id + row["extension"])).unlink(missing_ok=True)
@@ -186,3 +188,17 @@ def listening_stats():
         recent = [dict(row) for row in con.execute(
             "SELECT song_id, played_at FROM listening_events ORDER BY id DESC LIMIT 30")]
         return counts, recent
+
+
+def get_ai_tags():
+    with connect() as con:
+        return {row["song_id"]: {"genre": row["genre"], "mood": row["mood"]}
+                for row in con.execute("SELECT * FROM ai_tags")}
+
+
+def save_ai_tags(tags):
+    with connect() as con:
+        for sid, tag in tags.items():
+            con.execute("INSERT INTO ai_tags(song_id,genre,mood) VALUES (?,?,?) "
+                        "ON CONFLICT(song_id) DO UPDATE SET genre=excluded.genre,mood=excluded.mood",
+                        (sid, tag["genre"], tag["mood"]))
