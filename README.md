@@ -10,8 +10,8 @@ A Python app that analyzes audio and recommends music using acoustic features, l
 - Try hybrid recommendations combining three CLAP audio segments with acoustic features.
 - Rate how similar two songs sound (1–5), separately from Like/Dislike.
 - Discover similar or mood-based songs, save discoveries, and export playlists.
-- Explore your taste dashboard and interactive music universe.
-- Create and manage custom playlists.
+- Learn from liked/disliked songs, estimate mood/genre tags, and explore labeled music groups.
+- Create custom and AI-generated playlists; export and restore local library backups.
 - Search your local songs by natural-language description, try Surprise Me, and inspect recommendation explanations.
 
 ## Getting started
@@ -47,7 +47,7 @@ python -m pip install -r requirements.txt
 python -m streamlit run app.py
 ```
 
-Audio files and preferences are stored locally in `library_data/` and excluded from Git. Protected audio formats are not supported.
+Audio files, preferences, playlists and AI tags are stored locally in `library_data/` and excluded from Git. Backups include audio but not API keys. Restore merges records rather than overwriting existing data.
 
 
 ## Online music discovery
