@@ -55,6 +55,35 @@ def embedding_for(song):
     return mean
 
 
+def segment_embeddings_for(song):
+    """Retrieve/cache a 3 x D matrix of beginning/middle/end embeddings."""
+    target = EMBED_DIR / (song["id"] + "_sections_v1.npy")
+    if target.exists():
+        return np.load(target, allow_pickle=False)
+    EMBED_DIR.mkdir(parents=True, exist_ok=True)
+    processor, model, torch = _model()
+    audio, sr = librosa.load(str(song["path"]), sr=48000, mono=True, duration=180)
+    if len(audio) < sr:
+        raise ValueError("Audio too short")
+    duration = len(audio) / sr
+    starts = sorted(set(round(x, 2) for x in
+                        (0, max(0, (duration - 10) / 2), max(0, duration - 10))))
+    vectors = []
+    for start in starts:
+        clip = audio[int(start * sr):int((start + 10) * sr)]
+        inputs = processor(audios=[clip], sampling_rate=sr, return_tensors="pt")
+        with torch.no_grad():
+            vec = model.get_audio_features(**inputs)
+        if not isinstance(vec, torch.Tensor):
+            vec = getattr(vec, "pooler_output", vec[0])
+        arr = np.asarray(vec.detach().cpu().numpy()[0], dtype="float32")
+        arr /= max(float(np.linalg.norm(arr)), 1e-12)
+        vectors.append(arr)
+    result = np.stack(vectors)
+    np.save(target, result)
+    return result
+
+
 def ai_recommendations(library, selected_id, feedback=None, mode="similar",
                        weight=0.7, limit=10, acoustic_weight=0.25, pair_ratings=None):
     """Rank with CLAP embedding cosine similarity, optionally user ratings."""
