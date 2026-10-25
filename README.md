@@ -10,7 +10,8 @@ A Python app that analyzes audio and recommends music using acoustic features, l
 - Try hybrid recommendations combining three CLAP audio segments with acoustic features.
 - Rate how similar two songs sound (1–5), separately from Like/Dislike.
 - Compare CLAP-only, acoustic-only, and hybrid recommendations in the Evaluation tab.
-- Discover similar songs on Last.fm and open them in Spotify.
+- Discover similar or mood-based songs, save discoveries and export them to a Spotify playlist.
+- Explore your taste dashboard, interactive song map and best-matching song passages.
 
 ## Getting started
 
@@ -59,3 +60,5 @@ python -m streamlit run app.py
 ```
 
 Open **Online Discovery**, check the artist and track title, and click **Find new songs**. Spotify links open searches rather than guaranteed exact tracks. Last.fm uses listening data; external tracks are not analyzed by CLAP.
+
+For Spotify playlist export, create a Spotify developer application and register the redirect URI shown in the app. Then provide its client credentials in **Online Discovery → Export to Spotify playlist**; Spotify authorization occurs in your browser. Spotify matches tracks by artist/title, so inspect the created playlist for mismatches.
