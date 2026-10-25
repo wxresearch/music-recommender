@@ -492,3 +492,84 @@ with tab6:
                     st.caption("Nearby songs: " + " · ".join(nearest))
         else:
             st.info("Add more songs or rebuild the map after changing your library.")
+
+with tab8:
+    st.subheader("📁 Your playlists")
+    st.caption("Create playlists from songs already saved on this computer.")
+    with st.form("new_playlist"):
+        playlist_name = st.text_input("New playlist name", placeholder="Late night studying")
+        if st.form_submit_button("Create playlist"):
+            try:
+                create_playlist(playlist_name)
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+    playlists = list_playlists()
+    if not playlists:
+        st.info("Create your first playlist above.")
+    else:
+        pl = st.selectbox("Choose playlist", playlists, format_func=lambda p: p["name"])
+        members = playlist_song_ids(pl["id"])
+        member_songs = [song for song in library if song["id"] in members]
+        st.caption(str(len(members)) + " songs in this playlist")
+        to_add = st.selectbox("Add a song", library, format_func=song_label, key="playlist_add")
+        if st.button("➕ Add to playlist"):
+            try:
+                add_to_playlist(pl["id"], to_add["id"])
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+        for item in member_songs:
+            left, right = st.columns([5, 1])
+            left.write(song_label(item))
+            left.audio(str(item["path"]))
+            if right.button("Remove", key="playlist_rm_" + str(pl["id"]) + item["id"]):
+                remove_from_playlist(pl["id"], item["id"])
+                st.rerun()
+        with st.expander("Delete playlist"):
+            st.warning("This removes the playlist only, not the underlying songs.")
+            if st.button("Delete this playlist", key="delete_playlist_button"):
+                delete_playlist(pl["id"])
+                st.rerun()
+
+with tab9:
+    st.subheader("📊 Listening statistics")
+    st.caption("The audio player's Play button does not report playback to Streamlit. "
+               "Use Mark as played to record songs you actually listened to.")
+    played = st.selectbox("Song you listened to", library,
+                          format_func=song_label, key="played_song")
+    if st.button("▶ Mark as played"):
+        record_play(played["id"])
+        st.rerun()
+    counts, recent = listening_stats()
+    st.metric("Listening sessions recorded", sum(counts.values()))
+    top = sorted(library, key=lambda item: counts.get(item["id"], 0), reverse=True)
+    top = [item for item in top if counts.get(item["id"], 0) > 0]
+    if top:
+        st.subheader("Most played")
+        st.bar_chart(pd.DataFrame({"Song": [song_label(song) for song in top[:12]],
+                                   "Plays": [counts[song["id"]] for song in top[:12]]}).set_index("Song"))
+        st.subheader("Recent listening")
+        by_id = {song["id"]: song for song in library}
+        st.dataframe(pd.DataFrame([{"Song": song_label(by_id[e["song_id"]]),
+                                   "When": e["played_at"]} for e in recent
+                                  if e["song_id"] in by_id]), hide_index=True)
+    else:
+        st.info("No plays recorded yet.")
+    st.divider()
+    st.subheader("🔍 Possible duplicate recordings")
+    st.caption("Uses audio feature similarity and analyzed duration to suggest pairs for review. "
+               "It is not proof the files are identical; nothing is deleted automatically.")
+    if st.button("Scan my library for possible duplicates"):
+        st.session_state["duplicate_matches"] = duplicate_candidates(library)
+    if "duplicate_matches" in st.session_state:
+        candidates = st.session_state["duplicate_matches"]
+        if not candidates:
+            st.success("No strong near-duplicate candidates found.")
+        else:
+            for first, second, distance in candidates:
+                st.write(song_label(first) + " ↔ " + song_label(second))
+                st.caption("Acoustic feature distance: " + format(distance, ".3f"))
+                a, b = st.columns(2)
+                a.audio(str(first["path"]))
+                b.audio(str(second["path"]))
