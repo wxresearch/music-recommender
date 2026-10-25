@@ -67,7 +67,7 @@ def music_map(library, vectors=None):
         X = _embedding(pd.DataFrame([song["features"] for song in library]))
     coords = PCA(n_components=2).fit_transform(X)
     return pd.DataFrame({"x": coords[:, 0], "y": coords[:, 1],
-                         "title": [s["title"] for s in library],
+                         "title": [(s["title"] + (" — " + s["artist"] if s.get("artist") else "")) for s in library],
                          "id": [s["id"] for s in library]})
 
 
